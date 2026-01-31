@@ -16,8 +16,22 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Initialize Prisma client
-const prisma = new PrismaClient();
+// Initialize Prisma client with error handling for serverless
+let prisma;
+try {
+  if (process.env.DATABASE_URL) {
+    prisma = new PrismaClient({
+      log: ['error', 'warn'],
+    });
+    console.log('Prisma client initialized successfully');
+  } else {
+    console.warn('DATABASE_URL not set, Prisma client not initialized');
+    prisma = null;
+  }
+} catch (error) {
+  console.error('Failed to initialize Prisma client:', error);
+  prisma = null;
+}
 
 // Middleware
 app.use(helmet({
@@ -120,7 +134,12 @@ const authenticateToken = (req, res, next) => {
 
 // Root route
 app.get('/', (req, res) => {
-  res.json({ message: 'BUCCUSA API is running', status: 'OK' });
+  res.json({
+    message: 'BUCCUSA API is running',
+    status: 'OK',
+    database: prisma ? 'configured' : 'not configured',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Routes
@@ -128,6 +147,11 @@ app.get('/', (req, res) => {
 // Admin authentication
 app.post('/api/admin/login', async (req, res) => {
   try {
+    if (!prisma) {
+      console.log('Prisma not available, admin login disabled');
+      return res.status(503).json({ message: 'Database not available' });
+    }
+
     const { username, password } = req.body;
 
     const admin = await prisma.admin.findUnique({
@@ -154,8 +178,8 @@ app.post('/api/admin/login', async (req, res) => {
 
     res.json({ token, admin: { id: admin.id, username: admin.username, email: admin.email } });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -176,6 +200,20 @@ app.get('/api/programs', async (req, res) => {
 
 app.get('/api/leaders', async (req, res) => {
   try {
+    if (!prisma) {
+      console.log('Prisma not available, returning mock leaders');
+      return res.json([
+        {
+          id: 1,
+          name: "John Doe",
+          position: "President",
+          bio: "Dedicated to serving the BUCCUSA community",
+          image_url: null,
+          order_position: 1
+        }
+      ]);
+    }
+
     const leaders = await prisma.leader.findMany({
       orderBy: {
         order_position: 'asc'
@@ -205,6 +243,20 @@ app.get('/api/leaders', async (req, res) => {
 
 app.get('/api/events', async (req, res) => {
   try {
+    if (!prisma) {
+      console.log('Prisma not available, returning mock events');
+      return res.json([
+        {
+          id: 1,
+          title: "BUCCUSA Orientation",
+          description: "Welcome event for new students",
+          event_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          location: "Main Campus",
+          is_upcoming: true
+        }
+      ]);
+    }
+
     const events = await prisma.event.findMany({
       orderBy: {
         event_date: 'desc'
@@ -248,6 +300,19 @@ app.get('/api/events/:id', async (req, res) => {
 
 app.get('/api/posts', async (req, res) => {
   try {
+    if (!prisma) {
+      console.log('Prisma not available, returning mock data');
+      return res.json([
+        {
+          id: 1,
+          title: "Welcome to BUCCUSA",
+          content: "Welcome to the BUCCUSA Student Association website. We're excited to have you here!",
+          published_at: new Date().toISOString(),
+          published: true
+        }
+      ]);
+    }
+
     const posts = await prisma.post.findMany({
       where: {
         published: true
