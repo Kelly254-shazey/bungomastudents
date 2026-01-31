@@ -286,15 +286,22 @@ app.get('/api/events', async (req, res) => {
 
 app.get('/api/events/:id', async (req, res) => {
   try {
-    const db = await getDBConnection();
-    const [rows] = await db.execute('SELECT * FROM events WHERE id = ?', [req.params.id]);
-    if (rows.length === 0) {
+    if (!prisma) {
+      return res.status(503).json({ message: 'Database not available' });
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: parseInt(req.params.id) }
+    });
+
+    if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
-    res.json(rows[0]);
+
+    res.json(event);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Database error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -344,48 +351,71 @@ app.get('/api/posts', async (req, res) => {
 
 app.get('/api/posts/:id', async (req, res) => {
   try {
-    const db = await getDBConnection();
-    const [rows] = await db.execute('SELECT * FROM posts WHERE id = ? AND published = true', [req.params.id]);
-    if (rows.length === 0) {
+    if (!prisma) {
+      return res.status(503).json({ message: 'Database not available' });
+    }
+
+    const post = await prisma.post.findFirst({
+      where: {
+        id: parseInt(req.params.id),
+        published: true
+      }
+    });
+
+    if (!post) {
       return res.status(404).json({ message: 'Post not found' });
     }
-    res.json(rows[0]);
+
+    res.json(post);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Database error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.get('/api/impact-stats', async (req, res) => {
   try {
-    const db = await getDBConnection();
-    const [rows] = await db.execute('SELECT * FROM impact_stats');
-    res.json(rows);
+    if (!prisma) {
+      return res.json([]);
+    }
+
+    const impactStats = await prisma.impactStat.findMany();
+    res.json(impactStats);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Database error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.get('/api/testimonials', async (req, res) => {
   try {
-    const db = await getDBConnection();
-    const [rows] = await db.execute('SELECT * FROM testimonials');
-    res.json(rows);
+    if (!prisma) {
+      return res.json([]);
+    }
+
+    const testimonials = await prisma.testimonial.findMany();
+    res.json(testimonials);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Database error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.get('/api/gallery', async (req, res) => {
   try {
-    const db = await getDBConnection();
-    const [rows] = await db.execute('SELECT * FROM gallery ORDER BY created_at DESC');
-    res.json(rows);
+    if (!prisma) {
+      return res.json([]);
+    }
+
+    const gallery = await prisma.gallery.findMany({
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
+    res.json(gallery);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Database error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -575,53 +605,80 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
 // CRUD operations for admin
 app.get('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
-    const db = await getDBConnection();
-    const [rows] = await db.execute('SELECT * FROM programs ORDER BY id');
-    res.json(rows);
+    if (!prisma) {
+      return res.status(503).json({ message: 'Database not available' });
+    }
+
+    const programs = await prisma.program.findMany({
+      orderBy: {
+        id: 'asc'
+      }
+    });
+    res.json(programs);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Database error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.post('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
-    const db = await getDBConnection();
+    if (!prisma) {
+      return res.status(503).json({ message: 'Database not available' });
+    }
+
     const { title, description, icon } = req.body;
-    const [result] = await db.execute(
-      'INSERT INTO programs (title, description, icon, is_active) VALUES (?, ?, ?, 1)',
-      [title, description ?? null, icon ?? null]
-    );
-    res.json({ id: result.insertId, message: 'Program created successfully' });
+    const program = await prisma.program.create({
+      data: {
+        title,
+        description: description || null,
+        icon: icon || null,
+        is_active: true
+      }
+    });
+    res.json({ id: program.id, message: 'Program created successfully' });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Database error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
-    const db = await getDBConnection();
+    if (!prisma) {
+      return res.status(503).json({ message: 'Database not available' });
+    }
+
     const { title, description, icon, is_active } = req.body;
-    await db.execute(
-      'UPDATE programs SET title = ?, description = ?, icon = ?, is_active = COALESCE(?, is_active) WHERE id = ?',
-      [title, description ?? null, icon ?? null, is_active ?? null, req.params.id]
-    );
+    await prisma.program.update({
+      where: { id: parseInt(req.params.id) },
+      data: {
+        title,
+        description: description || null,
+        icon: icon || null,
+        is_active: is_active !== undefined ? is_active : undefined
+      }
+    });
     res.json({ message: 'Program updated successfully' });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Database error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
-    const db = await getDBConnection();
-    await db.execute('DELETE FROM programs WHERE id = ?', [req.params.id]);
+    if (!prisma) {
+      return res.status(503).json({ message: 'Database not available' });
+    }
+
+    await prisma.program.delete({
+      where: { id: parseInt(req.params.id) }
+    });
     res.json({ message: 'Program deleted successfully' });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Database error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
