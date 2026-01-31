@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const path = require('path');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const mysql = require('mysql2/promise');
+const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
@@ -16,27 +16,8 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Global database connection for serverless
-let db;
-
-// Database connection function for serverless
-async function getDBConnection() {
-  if (!db) {
-    try {
-      db = await mysql.createConnection({
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'buccusa_db'
-      });
-      console.log('Connected to MySQL/MariaDB database');
-    } catch (error) {
-      console.error('Database connection failed:', error);
-      throw error;
-    }
-  }
-  return db;
-}
+// Initialize Prisma client
+const prisma = new PrismaClient();
 
 // Middleware
 app.use(helmet({
@@ -132,16 +113,17 @@ app.get('/', (req, res) => {
 // Admin authentication
 app.post('/api/admin/login', async (req, res) => {
   try {
-    const db = await getDBConnection();
     const { username, password } = req.body;
 
-    const [rows] = await db.execute('SELECT * FROM admins WHERE username = ?', [username]);
-    if (rows.length === 0) {
-      console.log(`Login failed: Admin user '${username}' not found in MariaDB`);
+    const admin = await prisma.admin.findUnique({
+      where: { username }
+    });
+
+    if (!admin) {
+      console.log(`Login failed: Admin user '${username}' not found`);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    const admin = rows[0];
     const validPassword = await bcrypt.compare(password, admin.password_hash);
 
     if (!validPassword) {
@@ -165,9 +147,12 @@ app.post('/api/admin/login', async (req, res) => {
 // Public routes
 app.get('/api/programs', async (req, res) => {
   try {
-    const db = await getDBConnection();
-    const [rows] = await db.execute('SELECT * FROM programs ORDER BY id');
-    res.json(rows);
+    const programs = await prisma.program.findMany({
+      orderBy: {
+        id: 'asc'
+      }
+    });
+    res.json(programs);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -176,9 +161,12 @@ app.get('/api/programs', async (req, res) => {
 
 app.get('/api/leaders', async (req, res) => {
   try {
-    const db = await getDBConnection();
-    const [rows] = await db.execute('SELECT * FROM leaders ORDER BY order_position');
-    res.json(rows);
+    const leaders = await prisma.leader.findMany({
+      orderBy: {
+        order_position: 'asc'
+      }
+    });
+    res.json(leaders);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -187,9 +175,12 @@ app.get('/api/leaders', async (req, res) => {
 
 app.get('/api/events', async (req, res) => {
   try {
-    const db = await getDBConnection();
-    const [rows] = await db.execute('SELECT * FROM events ORDER BY event_date DESC');
-    res.json(rows);
+    const events = await prisma.event.findMany({
+      orderBy: {
+        event_date: 'desc'
+      }
+    });
+    res.json(events);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -212,9 +203,15 @@ app.get('/api/events/:id', async (req, res) => {
 
 app.get('/api/posts', async (req, res) => {
   try {
-    const db = await getDBConnection();
-    const [rows] = await db.execute('SELECT * FROM posts WHERE published = true ORDER BY published_at DESC');
-    res.json(rows);
+    const posts = await prisma.post.findMany({
+      where: {
+        published: true
+      },
+      orderBy: {
+        published_at: 'desc'
+      }
+    });
+    res.json(posts);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });

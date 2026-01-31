@@ -77,7 +77,7 @@ export function Navigation() {
             </Link>
             {/* Admin Icon */}
             <Link
-              href="/admin/login"
+              href="/admin/members/login"
               className={`p-2 rounded-lg transition-colors ${
                 isScrolled ? 'text-primary hover:bg-gray-100' : 'text-white hover:bg-white hover:bg-opacity-20'
               }`}
@@ -151,7 +151,7 @@ export function Navigation() {
                 Get Involved
               </Link>
               <Link
-                href="/admin/login"
+                href="/admin/members/login"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="flex items-center space-x-2 mt-4 py-3 text-primary font-medium hover:text-accent transition-colors"
               >

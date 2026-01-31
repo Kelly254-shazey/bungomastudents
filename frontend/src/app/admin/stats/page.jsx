@@ -35,7 +35,7 @@ export default function AdminStats() {
       } else if (response.status === 401) {
         localStorage.removeItem('adminToken')
         localStorage.removeItem('adminUser')
-        window.location.href = '/admin/login'
+        window.location.href = '/admin/members/login'
       }
     } catch (error) {
       console.error('Error fetching stats:', error)

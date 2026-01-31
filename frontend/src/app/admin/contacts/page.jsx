@@ -26,7 +26,7 @@ export default function AdminContacts() {
       } else if (response.status === 401) {
         localStorage.removeItem('adminToken')
         localStorage.removeItem('adminUser')
-        window.location.href = '/admin/login'
+        window.location.href = '/admin/members/login'
       } else {
         // Fallback: try to get from dashboard
         try {

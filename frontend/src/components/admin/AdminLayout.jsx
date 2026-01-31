@@ -13,13 +13,13 @@ export function AdminLayout({ children }) {
 
   useEffect(() => {
     // Don't redirect on login page
-    if (pathname === '/admin/login') {
+    if (pathname === '/admin/members/login') {
       return
     }
     
     const user = getAdminUser()
     if (!user) {
-      router.push('/admin/login')
+      router.push('/admin/members/login')
     } else {
       setAdminUser(user)
     }
@@ -27,7 +27,7 @@ export function AdminLayout({ children }) {
 
   const handleLogout = () => {
     clearAuth()
-    router.push('/admin/login')
+    router.push('/admin/members/login')
   }
 
   const menuItems = [
@@ -42,12 +42,12 @@ export function AdminLayout({ children }) {
   ]
 
   // Don't render layout on login page
-  if (pathname === '/admin/login') {
+  if (pathname === '/admin/members/login') {
     return <>{children}</>
   }
 
   // Show loading while checking authentication
-  if (!adminUser && pathname !== '/admin/login') {
+  if (!adminUser && pathname !== '/admin/members/login') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-950">
         <div className="text-center">

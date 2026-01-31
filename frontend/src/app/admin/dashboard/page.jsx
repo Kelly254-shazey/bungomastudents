@@ -24,7 +24,7 @@ export default function AdminDashboard() {
       } else if (response.status === 401) {
         localStorage.removeItem('adminToken')
         localStorage.removeItem('adminUser')
-        window.location.href = '/admin/login'
+        window.location.href = '/admin/members/login'
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
