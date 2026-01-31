@@ -268,7 +268,6 @@ app.get('/api/gallery', async (req, res) => {
 // Contact form
 app.post('/api/contact', async (req, res) => {
   try {
-    const db = await getDBConnection();
     const { name, email, subject, message } = req.body;
 
     // Validate required fields
@@ -278,10 +277,14 @@ app.post('/api/contact', async (req, res) => {
 
     // Insert into database
     try {
-      await db.execute(
-        'INSERT INTO contact_messages (name, email, subject, message) VALUES (?, ?, ?, ?)',
-        [name, email, subject, message]
-      );
+      await prisma.contactMessage.create({
+        data: {
+          name,
+          email,
+          subject,
+          message
+        }
+      });
     } catch (dbError) {
       console.error('Database error:', dbError);
       return res.status(500).json({ message: 'Database error', error: dbError.message });
