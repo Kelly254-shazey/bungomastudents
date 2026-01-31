@@ -1,0 +1,190 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id            Int       @id @default(autoincrement())
+  username      String    @unique
+  password_hash String?
+  email         String    @unique
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  // Relations
+  replies MessageReply[]
+
+  @@map("admins")
+}
+
+model ContactMessage {
+  id         Int       @id @default(autoincrement())
+  name       String
+  email      String
+  subject    String?
+  message    String?
+  is_read    Boolean   @default(false)
+  created_at DateTime  @default(now())
+
+  // Relations
+  replies MessageReply[]
+
+  @@map("contact_messages")
+}
+
+model Event {
+  id           Int      @id @default(autoincrement())
+  title        String
+  description  String?
+  event_date   DateTime
+  location     String?
+  image_url    String?
+  is_upcoming  Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("events")
+}
+
+model Gallery {
+  id         Int      @id @default(autoincrement())
+  title      String?
+  image_url  String
+  category   String?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("gallery")
+}
+
+model ImpactStat {
+  id         Int      @id @default(autoincrement())
+  label      String
+  icon       String?
+  value      Int
+  suffix     String   @default("")
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("impact_stats")
+}
+
+model Leader {
+  id             Int      @id @default(autoincrement())
+  name           String
+  title          String
+  bio            String?
+  photo_url      String?
+  order_position Int      @default(0)
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  role           String?
+
+  @@map("leaders")
+}
+
+model Member {
+  id         Int      @id @default(autoincrement())
+  name       String
+  email      String   @unique
+  phone      String?
+  position   String?
+  department String?
+  photo_url  String?
+  bio        String?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("members")
+}
+
+model MessageReply {
+  id                  Int            @id @default(autoincrement())
+  contact_message_id  Int
+  reply_text          String?
+  replied_by          Int?
+  created_at          DateTime       @default(now())
+
+  // Relations
+  contactMessage      ContactMessage @relation(fields: [contact_message_id], references: [id], onDelete: Cascade)
+  admin               Admin?         @relation(fields: [replied_by], references: [id])
+
+  @@map("message_replies")
+}
+
+model PartnershipRequest {
+  id                Int      @id @default(autoincrement())
+  organization_name String
+  contact_person    String
+  email             String
+  phone             String?
+  partnership_type  String?
+  message           String?
+  is_read           Boolean  @default(false)
+  created_at        DateTime @default(now())
+
+  @@map("partnership_requests")
+}
+
+model Post {
+  id           Int      @id @default(autoincrement())
+  title        String
+  content      String?
+  excerpt      String?
+  image_url    String?
+  published    Boolean  @default(false)
+  published_at DateTime?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("posts")
+}
+
+model Program {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  icon        String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("programs")
+}
+
+model Testimonial {
+  id         Int      @id @default(autoincrement())
+  name       String
+  message    String?
+  position   String?
+  photo_url  String?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("testimonials")
+}
+
+model VolunteerSubmission {
+  id         Int      @id @default(autoincrement())
+  name       String
+  email      String
+  phone      String?
+  interests  String?
+  experience String?
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  @@map("volunteer_submissions")
+}
