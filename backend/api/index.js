@@ -42,7 +42,10 @@ async function getDBConnection() {
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
-app.use(cors());
+app.use(cors({
+  origin: ['https://bgfront.vercel.app', 'http://localhost:3000'],
+  credentials: true
+}));
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 
