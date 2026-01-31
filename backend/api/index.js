@@ -119,6 +119,11 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Root route
+app.get('/', (req, res) => {
+  res.json({ message: 'BUCCUSA API is running', status: 'OK' });
+});
+
 // Routes
 
 // Admin authentication
