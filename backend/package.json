@@ -8,6 +8,7 @@
     "dev": "node server.js",
     "build": "prisma generate",
     "postinstall": "prisma generate",
+    "seed": "node prisma/seed.js",
     "deploy": "vercel --prod"
   },
   "keywords": [
