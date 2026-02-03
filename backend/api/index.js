@@ -22,21 +22,34 @@ let prismaInitError = null;
 
 const initializePrisma = () => {
   try {
-    // Check for Vercel specific storage environment variables (handling potential double prefixes)
-    const dbUrl = process.env.STORAGE_DATABASE_DATABASE_URL || 
-                  process.env.STORAGE_DATABASE_POSTGRES_URL || 
-                  process.env.STORAGE_DATABASE_URL || 
-                  process.env.DATABASE_URL;
+    // List of potential environment variables for the database connection
+    const candidates = [
+      process.env.STORAGE_DATABASE_DATABASE_URL,
+      process.env.STORAGE_DATABASE_POSTGRES_URL,
+      process.env.STORAGE_DATABASE_URL,
+      process.env.DATABASE_URL,
+      process.env.POSTGRES_URL
+    ];
 
-    const accelUrl = process.env.STORAGE_DATABASE_PRISMA_DATABASE_URL || 
-                     process.env.STORAGE_PRISMA_DATABASE_URL || 
-                     process.env.PRISMA_DATABASE_URL;
+    // Strictly find a direct Postgres connection (ignoring Accelerate/Proxy URLs)
+    const directUrl = candidates.find(url => 
+      url && 
+      (url.startsWith('postgres://') || url.startsWith('postgresql://')) &&
+      !url.startsWith('prisma://') &&
+      !url.startsWith('prisma+postgres://')
+    );
 
-    // Prioritize direct dbUrl to avoid P6002 (Invalid API Key) errors from broken Accelerate config
-    const connectionUrl = dbUrl || accelUrl;
+    // Fallback to Accelerate URL if no direct connection is found
+    const accelUrl = candidates.find(url => 
+      url && (url.startsWith('prisma://') || url.startsWith('prisma+postgres://'))
+    );
+
+    const connectionUrl = directUrl || accelUrl;
+    
+    console.log(`🔌 Database Init: Using ${directUrl ? 'Direct Connection' : (accelUrl ? 'Accelerate Proxy' : 'None')}`);
 
     if (!connectionUrl) {
-      prismaInitError = 'Database not configured - Check STORAGE_ prefix';
+      prismaInitError = 'Database not configured - No valid connection string found';
       return false;
     }
 
