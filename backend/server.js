@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const path = require('path');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const mysql = require('mysql2/promise');
+const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
@@ -38,22 +38,8 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Database connection
-let db;
-async function connectDB() {
-  try {
-    db = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'buccusa_db'
-    });
-    console.log('Connected to MySQL/MariaDB database');
-  } catch (error) {
-    console.error('Database connection failed:', error);
-    process.exit(1);
-  }
-}
+// Prisma Client initialization
+const prisma = new PrismaClient();
 
 // File upload configuration
 const storage = multer.diskStorage({
@@ -120,27 +106,21 @@ const authenticateToken = (req, res, next) => {
 app.post('/api/admin/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-
-    const [rows] = await db.execute('SELECT * FROM admins WHERE username = ?', [username]);
-    if (rows.length === 0) {
-      console.log(`Login failed: Admin user '${username}' not found in MariaDB`);
+    const admin = await prisma.admin.findUnique({ where: { username } });
+    if (!admin) {
+      console.log(`Login failed: Admin user '${username}' not found in Prisma DB`);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-
-    const admin = rows[0];
     const validPassword = await bcrypt.compare(password, admin.password_hash);
-
     if (!validPassword) {
       console.log(`Login failed: Invalid password for '${username}'`);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-
     const token = jwt.sign(
       { id: admin.id, username: admin.username },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
-
     res.json({ token, admin: { id: admin.id, username: admin.username, email: admin.email } });
   } catch (error) {
     console.error(error);
@@ -151,8 +131,8 @@ app.post('/api/admin/login', async (req, res) => {
 // Public routes
 app.get('/api/programs', async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM programs ORDER BY id');
-    res.json(rows);
+    const programs = await prisma.program.findMany({ orderBy: { id: 'asc' } });
+    res.json(programs);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -161,8 +141,8 @@ app.get('/api/programs', async (req, res) => {
 
 app.get('/api/leaders', async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM leaders ORDER BY order_position');
-    res.json(rows);
+    const leaders = await prisma.leader.findMany({ orderBy: { order_position: 'asc' } });
+    res.json(leaders);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -171,8 +151,8 @@ app.get('/api/leaders', async (req, res) => {
 
 app.get('/api/events', async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM events ORDER BY event_date DESC');
-    res.json(rows);
+    const events = await prisma.event.findMany({ orderBy: { event_date: 'desc' } });
+    res.json(events);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -181,11 +161,11 @@ app.get('/api/events', async (req, res) => {
 
 app.get('/api/events/:id', async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM events WHERE id = ?', [req.params.id]);
-    if (rows.length === 0) {
+    const event = await prisma.event.findUnique({ where: { id: Number(req.params.id) } });
+    if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
-    res.json(rows[0]);
+    res.json(event);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -194,8 +174,8 @@ app.get('/api/events/:id', async (req, res) => {
 
 app.get('/api/posts', async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM posts WHERE published = true ORDER BY published_at DESC');
-    res.json(rows);
+    const posts = await prisma.post.findMany({ where: { published: true }, orderBy: { published_at: 'desc' } });
+    res.json(posts);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -204,11 +184,11 @@ app.get('/api/posts', async (req, res) => {
 
 app.get('/api/posts/:id', async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM posts WHERE id = ? AND published = true', [req.params.id]);
-    if (rows.length === 0) {
+    const post = await prisma.post.findUnique({ where: { id: Number(req.params.id), published: true } });
+    if (!post) {
       return res.status(404).json({ message: 'Post not found' });
     }
-    res.json(rows[0]);
+    res.json(post);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -217,8 +197,8 @@ app.get('/api/posts/:id', async (req, res) => {
 
 app.get('/api/impact-stats', async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM impact_stats');
-    res.json(rows);
+    const stats = await prisma.impact_stats.findMany();
+    res.json(stats);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -227,8 +207,8 @@ app.get('/api/impact-stats', async (req, res) => {
 
 app.get('/api/testimonials', async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM testimonials');
-    res.json(rows);
+    const testimonials = await prisma.testimonial.findMany();
+    res.json(testimonials);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -237,8 +217,8 @@ app.get('/api/testimonials', async (req, res) => {
 
 app.get('/api/gallery', async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM gallery ORDER BY created_at DESC');
-    res.json(rows);
+    const gallery = await prisma.gallery.findMany({ orderBy: { created_at: 'desc' } });
+    res.json(gallery);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -898,12 +878,7 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-async function startServer() {
-  await connectDB();
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📊 Using MariaDB/MySQL backend`);
-  });
-}
-
-startServer();
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📊 Using Prisma backend`);
+});
