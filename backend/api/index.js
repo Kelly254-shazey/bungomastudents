@@ -286,18 +286,7 @@ app.get('/api/programs', async (req, res) => {
 app.get('/api/leaders', async (req, res) => {
   try {
     if (!isPrismaAvailable()) {
-      console.log('Database not available, returning mock leaders');
-      return res.json([
-        {
-          id: 1,
-          name: "John Doe",
-          title: "President",
-          bio: "Dedicated to serving the BUCCUSA community",
-          photoUrl: null,
-          orderPosition: 1,
-          isActive: true
-        }
-      ]);
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
 
     const leaders = await prisma.leader.findMany({
@@ -307,42 +296,16 @@ app.get('/api/leaders', async (req, res) => {
     });
     res.json(leaders);
   } catch (error) {
-    const mockData = [
-      {
-        id: 1,
-        name: "John Doe",
-        title: "President",
-        bio: "Dedicated to serving the BUCCUSA community",
-        photoUrl: null,
-        orderPosition: 1,
-        isActive: true
-      }
-    ];
-    
-    const { isConnectionError } = handlePrismaError(error, mockData);
-    if (isConnectionError) {
-      return res.json(mockData);
-    }
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.get('/api/events', async (req, res) => {
   try {
     if (!isPrismaAvailable()) {
-      console.log('Database not available, returning mock events');
-      return res.json([
-        {
-          id: 1,
-          title: "BUCCUSA Orientation",
-          description: "Welcome event for new students",
-          eventDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          location: "Main Campus",
-          imageUrl: null,
-          isUpcoming: true,
-          createdAt: new Date().toISOString()
-        }
-      ]);
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
 
     const events = await prisma.event.findMany({
@@ -352,24 +315,9 @@ app.get('/api/events', async (req, res) => {
     });
     res.json(events);
   } catch (error) {
-    const mockData = [
-      {
-        id: 1,
-        title: "BUCCUSA Orientation",
-        description: "Welcome event for new students",
-        eventDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        location: "Main Campus",
-        imageUrl: null,
-        isUpcoming: true,
-        createdAt: new Date().toISOString()
-      }
-    ];
-
-    const { isConnectionError } = handlePrismaError(error, mockData);
-    if (isConnectionError) {
-      return res.json(mockData);
-    }
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
@@ -404,19 +352,7 @@ app.get('/api/events/:id', async (req, res) => {
 app.get('/api/posts', async (req, res) => {
   try {
     if (!isPrismaAvailable()) {
-      console.log('Database not available, returning mock posts');
-      return res.json([
-        {
-          id: 1,
-          title: "Welcome to BUCCUSA",
-          excerpt: "Welcome to the BUCCUSA Student Association",
-          content: "Welcome to the BUCCUSA Student Association website. We're excited to have you here!",
-          imageUrl: null,
-          published: true,
-          publishedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString()
-        }
-      ]);
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
 
     const posts = await prisma.post.findMany({
@@ -429,24 +365,9 @@ app.get('/api/posts', async (req, res) => {
     });
     res.json(posts);
   } catch (error) {
-    const mockData = [
-      {
-        id: 1,
-        title: "Welcome to BUCCUSA",
-        excerpt: "Welcome to the BUCCUSA Student Association",
-        content: "Welcome to the BUCCUSA Student Association website. We're excited to have you here!",
-        imageUrl: null,
-        published: true,
-        publishedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString()
-      }
-    ];
-
-    const { isConnectionError } = handlePrismaError(error, mockData);
-    if (isConnectionError) {
-      return res.json(mockData);
-    }
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
