@@ -16,6 +16,13 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+// Prisma Client initialization for MySQL
+const prisma = new PrismaClient({
+  log: ['error', 'warn'],
+  __internal: {
+    engine: 'binary',
+  },
+});
 
 // Middleware
 app.use(helmet({
@@ -37,9 +44,6 @@ const limiter = rateLimit({
   max: 100 // limit each IP to 100 requests per windowMs
 });
 app.use('/api/', limiter);
-
-// Prisma Client initialization
-const prisma = new PrismaClient();
 
 // File upload configuration
 const storage = multer.diskStorage({
