@@ -237,10 +237,9 @@ app.post('/api/contact', async (req, res) => {
 
     // Insert into database
     try {
-      await db.execute(
-        'INSERT INTO contact_messages (name, email, subject, message) VALUES (?, ?, ?, ?)',
-        [name, email, subject, message]
-      );
+      await prisma.contact_messages.create({
+        data: { name, email, subject, message }
+      });
     } catch (dbError) {
       console.error('Database error:', dbError);
       return res.status(500).json({ message: 'Database error', error: dbError.message });
@@ -281,10 +280,16 @@ app.post('/api/partnership', async (req, res) => {
   try {
     const { organizationName, contactPerson, email, phone, partnershipType, message } = req.body;
 
-    await db.execute(
-      'INSERT INTO partnership_requests (organization_name, contact_person, email, phone, partnership_type, message) VALUES (?, ?, ?, ?, ?, ?)',
-      [organizationName, contactPerson, email, phone, partnershipType, message]
-    );
+    await prisma.partnership_requests.create({
+      data: {
+        organization_name: organizationName,
+        contact_person: contactPerson,
+        email,
+        phone,
+        partnership_type: partnershipType,
+        message
+      }
+    });
 
     // Send email notification
     const mailOptions = {
@@ -319,10 +324,9 @@ app.post('/api/volunteer', async (req, res) => {
   try {
     const { name, email, phone, interests, experience } = req.body;
 
-    await db.execute(
-      'INSERT INTO volunteer_submissions (name, email, phone, interests, experience) VALUES (?, ?, ?, ?, ?)',
-      [name, email, phone, interests, experience]
-    );
+    await prisma.volunteer_submissions.create({
+      data: { name, email, phone, interests, experience }
+    });
 
     // Send email notification
     const mailOptions = {
@@ -355,46 +359,31 @@ app.post('/api/volunteer', async (req, res) => {
 app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
   try {
     // Get comprehensive stats
-    const [stats] = await db.execute(`
-      SELECT
-        (SELECT COUNT(*) FROM contact_messages WHERE is_read = false) as unread_messages,
-        (SELECT COUNT(*) FROM contact_messages) as total_messages,
-        (SELECT COUNT(*) FROM posts WHERE published = true) as published_posts,
-        (SELECT COUNT(*) FROM posts) as total_posts,
-        (SELECT COUNT(*) FROM events) as total_events,
-        (SELECT COUNT(*) FROM programs WHERE is_active = 1) as active_programs,
-        (SELECT COUNT(*) FROM programs) as total_programs,
-        (SELECT COUNT(*) FROM testimonials) as total_testimonials,
-        (SELECT COUNT(*) FROM impact_stats) as total_stats,
-        (SELECT COUNT(*) FROM leaders WHERE is_active = 1) as active_leaders,
-        (SELECT COUNT(*) FROM members WHERE is_active = 1) as active_members
-    `);
-
-    // Get recent contacts
-    const [recentContacts] = await db.execute(
-      'SELECT id, name, email, subject, created_at FROM contact_messages ORDER BY created_at DESC LIMIT 5'
-    );
-
-    // Also get some sample data counts to verify
-    const [sampleCounts] = await db.execute(`
-      SELECT 
-        'programs' as table_name, COUNT(*) as count FROM programs
-      UNION ALL
-      SELECT 'events' as table_name, COUNT(*) as count FROM events
-      UNION ALL
-      SELECT 'testimonials' as table_name, COUNT(*) as count FROM testimonials
-      UNION ALL
-      SELECT 'posts' as table_name, COUNT(*) as count FROM posts
-    `);
-
-    console.log('Dashboard stats:', stats[0]);
-    console.log('Sample counts:', sampleCounts);
-
-    res.json({ 
-      stats: stats[0],
-      recentContacts,
-      debug: sampleCounts
+    const stats = {
+      unread_messages: await prisma.contact_messages.count({ where: { is_read: false } }),
+      total_messages: await prisma.contact_messages.count(),
+      published_posts: await prisma.post.count({ where: { published: true } }),
+      total_posts: await prisma.post.count(),
+      total_events: await prisma.event.count(),
+      active_programs: await prisma.program.count({ where: { is_active: 1 } }),
+      total_programs: await prisma.program.count(),
+      total_testimonials: await prisma.testimonial.count(),
+      total_stats: await prisma.impact_stats.count(),
+      active_leaders: await prisma.leader.count({ where: { is_active: 1 } }),
+      active_members: await prisma.member.count({ where: { is_active: 1 } })
+    };
+    const recentContacts = await prisma.contact_messages.findMany({
+      select: { id: true, name: true, email: true, subject: true, created_at: true },
+      orderBy: { created_at: 'desc' },
+      take: 5
     });
+    const sampleCounts = [
+      { table_name: 'programs', count: await prisma.program.count() },
+      { table_name: 'events', count: await prisma.event.count() },
+      { table_name: 'testimonials', count: await prisma.testimonial.count() },
+      { table_name: 'posts', count: await prisma.post.count() }
+    ];
+    res.json({ stats, recentContacts, debug: sampleCounts });
   } catch (error) {
     console.error('Dashboard error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -404,8 +393,8 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
 // CRUD operations for admin
 app.get('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM programs ORDER BY id');
-    res.json(rows);
+    const programs = await prisma.program.findMany({ orderBy: { id: 'asc' } });
+    res.json(programs);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -415,11 +404,10 @@ app.get('/api/admin/programs', authenticateToken, async (req, res) => {
 app.post('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
     const { title, description, icon } = req.body;
-    const [result] = await db.execute(
-      'INSERT INTO programs (title, description, icon, is_active) VALUES (?, ?, ?, 1)',
-      [title, description ?? null, icon ?? null]
-    );
-    res.json({ id: result.insertId, message: 'Program created successfully' });
+    const program = await prisma.program.create({
+      data: { title, description: description ?? null, icon: icon ?? null, is_active: 1 }
+    });
+    res.json({ id: program.id, message: 'Program created successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -429,10 +417,10 @@ app.post('/api/admin/programs', authenticateToken, async (req, res) => {
 app.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
     const { title, description, icon, is_active } = req.body;
-    await db.execute(
-      'UPDATE programs SET title = ?, description = ?, icon = ?, is_active = COALESCE(?, is_active) WHERE id = ?',
-      [title, description ?? null, icon ?? null, is_active ?? null, req.params.id]
-    );
+    await prisma.program.update({
+      where: { id: Number(req.params.id) },
+      data: { title, description: description ?? null, icon: icon ?? null, is_active: is_active ?? undefined }
+    });
     res.json({ message: 'Program updated successfully' });
   } catch (error) {
     console.error(error);
@@ -442,7 +430,7 @@ app.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
-    await db.execute('DELETE FROM programs WHERE id = ?', [req.params.id]);
+    await prisma.program.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Program deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -453,8 +441,8 @@ app.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
 // CRUD for Leaders (Officials)
 app.get('/api/admin/leaders', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM leaders ORDER BY order_position');
-    res.json(rows);
+    const leaders = await prisma.leader.findMany({ orderBy: { order_position: 'asc' } });
+    res.json(leaders);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -465,21 +453,17 @@ app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
   try {
     const { name, title, bio, photo_url } = req.body;
     
-    let result;
     try {
-      // Get max order_position
-      const [maxOrder] = await db.execute('SELECT COALESCE(MAX(order_position), 0) as max_order FROM leaders');
-      const nextOrder = maxOrder[0].max_order + 1;
-      
-      [result] = await db.execute(
-        'INSERT INTO leaders (name, title, bio, photo_url, order_position, is_active) VALUES (?, ?, ?, ?, ?, 1)',
-        [name, title, bio ?? null, photo_url ?? null, nextOrder]
-      );
+      const maxOrder = await prisma.leader.aggregate({ _max: { order_position: true } });
+      const nextOrder = (maxOrder._max.order_position || 0) + 1;
+      const leader = await prisma.leader.create({
+        data: { name, title, bio: bio ?? null, photo_url: photo_url ?? null, order_position: nextOrder, is_active: 1 }
+      });
+      res.json({ id: leader.id, message: 'Official added successfully' });
     } catch (dbError) {
       console.error("Database insertion error:", dbError);
       return res.status(500).json({ message: 'Database insertion error', error: dbError.message });
     }
-    res.json({ id: result.insertId, message: 'Official added successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -490,10 +474,17 @@ app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
 app.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
   try {
     const { name, title, bio, photo_url, order_position, is_active } = req.body;
-    await db.execute(
-      'UPDATE leaders SET name = ?, title = ?, bio = ?, photo_url = ?, order_position = COALESCE(?, order_position), is_active = COALESCE(?, is_active) WHERE id = ?',
-      [name, title, bio ?? null, photo_url ?? null, order_position ?? null, is_active ?? null, req.params.id]
-    );
+    await prisma.leader.update({
+      where: { id: Number(req.params.id) },
+      data: {
+        name,
+        title,
+        bio: bio ?? null,
+        photo_url: photo_url ?? null,
+        order_position: order_position ?? undefined,
+        is_active: is_active ?? undefined
+      }
+    });
     res.json({ message: 'Official updated successfully' });
   } catch (error) {
     console.error('Error updating official:', error);
@@ -504,7 +495,7 @@ app.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
   try {
-    await db.execute('DELETE FROM leaders WHERE id = ?', [req.params.id]);
+    await prisma.leader.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Official deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -516,8 +507,8 @@ app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
 // CRUD for Members
 app.get('/api/admin/members', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM members ORDER BY created_at DESC');
-    res.json(rows);
+    const members = await prisma.member.findMany({ orderBy: { created_at: 'desc' } });
+    res.json(members);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -527,11 +518,10 @@ app.get('/api/admin/members', authenticateToken, async (req, res) => {
 app.post('/api/admin/members', authenticateToken, async (req, res) => {
   try {
     const { name, email, phone, position, department, photo_url, bio } = req.body;
-    const [result] = await db.execute(
-      'INSERT INTO members (name, email, phone, position, department, photo_url, bio) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [name, email, phone ?? null, position ?? null, department ?? null, photo_url ?? null, bio ?? null]
-    );
-    res.json({ id: result.insertId, message: 'Member added successfully' });
+    const member = await prisma.member.create({
+      data: { name, email, phone: phone ?? null, position: position ?? null, department: department ?? null, photo_url: photo_url ?? null, bio: bio ?? null }
+    });
+    res.json({ id: member.id, message: 'Member added successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -541,10 +531,10 @@ app.post('/api/admin/members', authenticateToken, async (req, res) => {
 app.put('/api/admin/members/:id', authenticateToken, async (req, res) => {
   try {
     const { name, email, phone, position, department, photo_url, bio, is_active } = req.body;
-    await db.execute(
-      'UPDATE members SET name = ?, email = ?, phone = ?, position = ?, department = ?, photo_url = ?, bio = ?, is_active = ? WHERE id = ?',
-      [name, email, phone ?? null, position ?? null, department ?? null, photo_url ?? null, bio ?? null, is_active ?? null, req.params.id]
-    );
+    await prisma.member.update({
+      where: { id: Number(req.params.id) },
+      data: { name, email, phone: phone ?? null, position: position ?? null, department: department ?? null, photo_url: photo_url ?? null, bio: bio ?? null, is_active: is_active ?? undefined }
+    });
     res.json({ message: 'Member updated successfully' });
   } catch (error) {
     console.error(error);
@@ -554,7 +544,7 @@ app.put('/api/admin/members/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/members/:id', authenticateToken, async (req, res) => {
   try {
-    await db.execute('DELETE FROM members WHERE id = ?', [req.params.id]);
+    await prisma.member.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Member deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -565,8 +555,8 @@ app.delete('/api/admin/members/:id', authenticateToken, async (req, res) => {
 // CRUD for Events
 app.get('/api/admin/events', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM events ORDER BY event_date DESC');
-    res.json(rows);
+    const events = await prisma.event.findMany({ orderBy: { event_date: 'desc' } });
+    res.json(events);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -576,11 +566,10 @@ app.get('/api/admin/events', authenticateToken, async (req, res) => {
 app.post('/api/admin/events', authenticateToken, async (req, res) => {
   try {
     const { title, description, event_date, location, image_url, is_upcoming } = req.body;
-    const [result] = await db.execute(
-      'INSERT INTO events (title, description, event_date, location, image_url, is_upcoming) VALUES (?, ?, ?, ?, ?, ?)',
-      [title, description ?? null, event_date, location ?? null, image_url ?? null, is_upcoming]
-    );
-    res.json({ id: result.insertId, message: 'Event created successfully' });
+    const event = await prisma.event.create({
+      data: { title, description: description ?? null, event_date, location: location ?? null, image_url: image_url ?? null, is_upcoming }
+    });
+    res.json({ id: event.id, message: 'Event created successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -590,10 +579,10 @@ app.post('/api/admin/events', authenticateToken, async (req, res) => {
 app.put('/api/admin/events/:id', authenticateToken, async (req, res) => {
   try {
     const { title, description, event_date, location, image_url, is_upcoming } = req.body;
-    await db.execute(
-      'UPDATE events SET title = ?, description = ?, event_date = ?, location = ?, image_url = ?, is_upcoming = ? WHERE id = ?',
-      [title, description ?? null, event_date, location ?? null, image_url ?? null, is_upcoming, req.params.id]
-    );
+    await prisma.event.update({
+      where: { id: Number(req.params.id) },
+      data: { title, description: description ?? null, event_date, location: location ?? null, image_url: image_url ?? null, is_upcoming }
+    });
     res.json({ message: 'Event updated successfully' });
   } catch (error) {
     console.error(error);
@@ -603,7 +592,7 @@ app.put('/api/admin/events/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/events/:id', authenticateToken, async (req, res) => {
   try {
-    await db.execute('DELETE FROM events WHERE id = ?', [req.params.id]);
+    await prisma.event.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -614,10 +603,8 @@ app.delete('/api/admin/events/:id', authenticateToken, async (req, res) => {
 // Contact Messages Management
 app.get('/api/admin/messages', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.execute(
-      'SELECT * FROM contact_messages ORDER BY created_at DESC'
-    );
-    res.json(rows);
+    const messages = await prisma.contact_messages.findMany({ orderBy: { created_at: 'desc' } });
+    res.json(messages);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -673,7 +660,7 @@ app.post('/api/admin/messages/:id/reply', authenticateToken, async (req, res) =>
 
 app.put('/api/admin/messages/:id/read', authenticateToken, async (req, res) => {
   try {
-    await db.execute('UPDATE contact_messages SET is_read = true WHERE id = ?', [req.params.id]);
+    await prisma.contact_messages.update({ where: { id: Number(req.params.id) }, data: { is_read: true } });
     res.json({ message: 'Message marked as read' });
   } catch (error) {
     console.error(error);
@@ -683,7 +670,7 @@ app.put('/api/admin/messages/:id/read', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/messages/:id', authenticateToken, async (req, res) => {
   try {
-    await db.execute('DELETE FROM contact_messages WHERE id = ?', [req.params.id]);
+    await prisma.contact_messages.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Message deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -694,8 +681,8 @@ app.delete('/api/admin/messages/:id', authenticateToken, async (req, res) => {
 // CRUD for Posts (Announcements)
 app.get('/api/admin/posts', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM posts ORDER BY created_at DESC');
-    res.json(rows);
+    const posts = await prisma.post.findMany({ orderBy: { created_at: 'desc' } });
+    res.json(posts);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -706,11 +693,10 @@ app.post('/api/admin/posts', authenticateToken, async (req, res) => {
   try {
     const { title, content, excerpt, image_url, published } = req.body;
     const published_at = published ? new Date() : null;
-    const [result] = await db.execute(
-      'INSERT INTO posts (title, content, excerpt, image_url, published, published_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [title, content ?? null, excerpt ?? null, image_url ?? null, published, published_at]
-    );
-    res.json({ id: result.insertId, message: 'Post created successfully' });
+    const post = await prisma.post.create({
+      data: { title, content: content ?? null, excerpt: excerpt ?? null, image_url: image_url ?? null, published, published_at }
+    });
+    res.json({ id: post.id, message: 'Post created successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -721,10 +707,10 @@ app.put('/api/admin/posts/:id', authenticateToken, async (req, res) => {
   try {
     const { title, content, excerpt, image_url, published } = req.body;
     const published_at = published ? new Date() : null;
-    await db.execute(
-      'UPDATE posts SET title = ?, content = ?, excerpt = ?, image_url = ?, published = ?, published_at = ? WHERE id = ?',
-      [title, content ?? null, excerpt ?? null, image_url ?? null, published, published_at, req.params.id]
-    );
+    await prisma.post.update({
+      where: { id: Number(req.params.id) },
+      data: { title, content: content ?? null, excerpt: excerpt ?? null, image_url: image_url ?? null, published, published_at }
+    });
     res.json({ message: 'Post updated successfully' });
   } catch (error) {
     console.error(error);
@@ -734,7 +720,7 @@ app.put('/api/admin/posts/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
   try {
-    await db.execute('DELETE FROM posts WHERE id = ?', [req.params.id]);
+    await prisma.post.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Post deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -745,8 +731,8 @@ app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
 // CRUD for Testimonials
 app.get('/api/admin/testimonials', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM testimonials ORDER BY created_at DESC');
-    res.json(rows);
+    const testimonials = await prisma.testimonial.findMany({ orderBy: { created_at: 'desc' } });
+    res.json(testimonials);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -756,11 +742,10 @@ app.get('/api/admin/testimonials', authenticateToken, async (req, res) => {
 app.post('/api/admin/testimonials', authenticateToken, async (req, res) => {
   try {
     const { name, role, content, image } = req.body;
-    const [result] = await db.execute(
-      'INSERT INTO testimonials (name, role, content, image) VALUES (?, ?, ?, ?)',
-      [name, role, content, image || null]
-    );
-    res.json({ id: result.insertId, message: 'Testimonial created successfully' });
+    const testimonial = await prisma.testimonial.create({
+      data: { name, role, content, image: image || null }
+    });
+    res.json({ id: testimonial.id, message: 'Testimonial created successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -770,10 +755,10 @@ app.post('/api/admin/testimonials', authenticateToken, async (req, res) => {
 app.put('/api/admin/testimonials/:id', authenticateToken, async (req, res) => {
   try {
     const { name, role, content, image } = req.body;
-    await db.execute(
-      'UPDATE testimonials SET name = ?, role = ?, content = ?, image = ? WHERE id = ?',
-      [name, role, content, image || null, req.params.id]
-    );
+    await prisma.testimonial.update({
+      where: { id: Number(req.params.id) },
+      data: { name, role, content, image: image || null }
+    });
     res.json({ message: 'Testimonial updated successfully' });
   } catch (error) {
     console.error(error);
@@ -783,7 +768,7 @@ app.put('/api/admin/testimonials/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/testimonials/:id', authenticateToken, async (req, res) => {
   try {
-    await db.execute('DELETE FROM testimonials WHERE id = ?', [req.params.id]);
+    await prisma.testimonial.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Testimonial deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -794,8 +779,8 @@ app.delete('/api/admin/testimonials/:id', authenticateToken, async (req, res) =>
 // CRUD for Impact Stats
 app.get('/api/admin/impact-stats', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM impact_stats ORDER BY id');
-    res.json(rows);
+    const stats = await prisma.impact_stats.findMany({ orderBy: { id: 'asc' } });
+    res.json(stats);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -805,11 +790,10 @@ app.get('/api/admin/impact-stats', authenticateToken, async (req, res) => {
 app.post('/api/admin/impact-stats', authenticateToken, async (req, res) => {
   try {
     const { number, label, icon } = req.body;
-    const [result] = await db.execute(
-      'INSERT INTO impact_stats (number, label, icon) VALUES (?, ?, ?)',
-      [number, label, icon || 'users']
-    );
-    res.json({ id: result.insertId, message: 'Stat created successfully' });
+    const stat = await prisma.impact_stats.create({
+      data: { number, label, icon: icon || 'users' }
+    });
+    res.json({ id: stat.id, message: 'Stat created successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -819,10 +803,10 @@ app.post('/api/admin/impact-stats', authenticateToken, async (req, res) => {
 app.put('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
   try {
     const { number, label, icon } = req.body;
-    await db.execute(
-      'UPDATE impact_stats SET number = ?, label = ?, icon = ? WHERE id = ?',
-      [number, label, icon || 'users', req.params.id]
-    );
+    await prisma.impact_stats.update({
+      where: { id: Number(req.params.id) },
+      data: { number, label, icon: icon || 'users' }
+    });
     res.json({ message: 'Stat updated successfully' });
   } catch (error) {
     console.error(error);
@@ -832,7 +816,7 @@ app.put('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
   try {
-    await db.execute('DELETE FROM impact_stats WHERE id = ?', [req.params.id]);
+    await prisma.impact_stats.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Stat deleted successfully' });
   } catch (error) {
     console.error(error);
