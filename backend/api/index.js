@@ -22,9 +22,15 @@ let prismaInitError = null;
 
 const initializePrisma = () => {
   try {
-    // This bridge looks for the prefixed names you set in the Vercel UI
-    const dbUrl = process.env.STORAGE_DATABASE_URL || process.env.DATABASE_URL;
-    const accelUrl = process.env.STORAGE_PRISMA_DATABASE_URL || process.env.PRISMA_DATABASE_URL;
+    // Check for Vercel specific storage environment variables (handling potential double prefixes)
+    const dbUrl = process.env.STORAGE_DATABASE_DATABASE_URL || 
+                  process.env.STORAGE_DATABASE_POSTGRES_URL || 
+                  process.env.STORAGE_DATABASE_URL || 
+                  process.env.DATABASE_URL;
+
+    const accelUrl = process.env.STORAGE_DATABASE_PRISMA_DATABASE_URL || 
+                     process.env.STORAGE_PRISMA_DATABASE_URL || 
+                     process.env.PRISMA_DATABASE_URL;
 
     // Prioritize direct dbUrl to avoid P6002 (Invalid API Key) errors from broken Accelerate config
     const connectionUrl = dbUrl || accelUrl;
