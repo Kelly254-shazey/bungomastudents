@@ -183,6 +183,22 @@ app.get('/', (req, res) => {
   });
 });
 
+// Debug route to check environment and connection status
+app.get('/api/debug', (req, res) => {
+  res.json({
+    status: 'Debug Endpoint',
+    env: {
+      has_database_url: !!process.env.DATABASE_URL,
+      has_storage_url: !!process.env.STORAGE_DATABASE_DATABASE_URL,
+      node_env: process.env.NODE_ENV
+    },
+    prisma: {
+      initialized: isPrismaAvailable(),
+      init_error: prismaInitError
+    }
+  });
+});
+
 // Health check endpoint with detailed status
 app.get('/api/health', async (req, res) => {
   const health = {
@@ -284,7 +300,7 @@ app.get('/api/programs', async (req, res) => {
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
     const statusCode = isConnectionError ? 503 : 500;
-    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
+    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message, stack: error.stack });
   }
 });
 
@@ -303,7 +319,7 @@ app.get('/api/leaders', async (req, res) => {
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
     const statusCode = isConnectionError ? 503 : 500;
-    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
+    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message, stack: error.stack });
   }
 });
 
@@ -322,7 +338,7 @@ app.get('/api/events', async (req, res) => {
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
     const statusCode = isConnectionError ? 503 : 500;
-    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
+    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message, stack: error.stack });
   }
 });
 
@@ -349,7 +365,8 @@ app.get('/api/events/:id', async (req, res) => {
     const statusCode = isConnectionError ? 503 : 500;
     res.status(statusCode).json({ 
       message: isConnectionError ? 'Database connection failed' : 'Server error',
-      error: error.message 
+      error: error.message,
+      stack: error.stack
     });
   }
 });
@@ -372,7 +389,7 @@ app.get('/api/posts', async (req, res) => {
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
     const statusCode = isConnectionError ? 503 : 500;
-    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
+    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message, stack: error.stack });
   }
 });
 
@@ -402,7 +419,8 @@ app.get('/api/posts/:id', async (req, res) => {
     const statusCode = isConnectionError ? 503 : 500;
     res.status(statusCode).json({ 
       message: isConnectionError ? 'Database connection failed' : 'Server error',
-      error: error.message 
+      error: error.message,
+      stack: error.stack
     });
   }
 });
@@ -418,7 +436,7 @@ app.get('/api/impact-stats', async (req, res) => {
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
     const statusCode = isConnectionError ? 503 : 500;
-    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
+    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message, stack: error.stack });
   }
 });
 
@@ -433,7 +451,7 @@ app.get('/api/testimonials', async (req, res) => {
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
     const statusCode = isConnectionError ? 503 : 500;
-    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
+    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message, stack: error.stack });
   }
 });
 
@@ -452,7 +470,7 @@ app.get('/api/gallery', async (req, res) => {
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
     const statusCode = isConnectionError ? 503 : 500;
-    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
+    res.status(statusCode).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message, stack: error.stack });
   }
 });
 
@@ -674,8 +692,8 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
       prisma.program.count(),
       prisma.testimonial.count(),
       prisma.impactStat.count(),
-      prisma.leader.count({ where: { is_active: true } }),
-      prisma.member.count({ where: { is_active: true } })
+      prisma.leader.count({ where: { is_active: true } }), 
+      prisma.member ? prisma.member.count({ where: { is_active: true } }) : 0 // Handle missing Member model
     ]);
 
     const stats = {
