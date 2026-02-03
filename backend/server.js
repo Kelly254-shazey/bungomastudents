@@ -633,16 +633,14 @@ app.post('/api/admin/messages/:id/reply', authenticateToken, async (req, res) =>
       return res.status(400).json({ message: 'Reply text is required' });
     }
 
-    // Get message details
-    const [messages] = await db.execute('SELECT * FROM contact_messages WHERE id = ?', [messageId]);
-    if (messages.length === 0) {
+    // Get message details from Prisma
+    const message = await prisma.contact_messages.findUnique({ where: { id: Number(messageId) } });
+    if (!message) {
       return res.status(404).json({ message: 'Message not found' });
     }
 
-    const message = messages[0];
-
     // Mark message as read
-    await db.execute('UPDATE contact_messages SET is_read = true WHERE id = ?', [messageId]);
+    await prisma.contact_messages.update({ where: { id: Number(messageId) }, data: { is_read: true } });
 
     // Send email reply only if transporter is configured
     if (transporter) {
@@ -659,13 +657,14 @@ app.post('/api/admin/messages/:id/reply', authenticateToken, async (req, res) =>
           `
         };
         await transporter.sendMail(mailOptions);
+        res.json({ message: 'Reply sent successfully and delivered to user email.' });
       } catch (emailError) {
         console.error('Email sending failed:', emailError);
-        return res.json({ message: 'Reply saved but email sending failed' });
+        res.json({ message: 'Reply saved but email sending failed', error: emailError.message });
       }
+    } else {
+      res.json({ message: 'Reply saved, but email service is not configured.' });
     }
-
-    res.json({ message: 'Reply sent successfully' });
   } catch (error) {
     console.error('Reply error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
