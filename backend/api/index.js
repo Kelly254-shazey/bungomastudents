@@ -17,6 +17,9 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 
 // Initialize Prisma client with enhanced error handling for serverless
+
+app.set('trust proxy', 1); // Trust first proxy
+
 let prisma = null;
 let prismaInitError = null;
 
@@ -77,6 +80,13 @@ const handlePrismaError = (error) => {
                            error?.message?.includes('database') ||
                            error?.message?.includes('ECONNREFUSED');
   
+  // Handle Prisma Accelerate Invalid API Key error (P6002)
+  if (error?.code === 'P6002' || (error?.message && error.message.includes('P6002'))) {
+    console.error('❌ CRITICAL DATABASE ERROR: Invalid API Key for Prisma Accelerate/Postgres.');
+    console.error('   Please rotate your API Key in the Prisma Console and update Vercel Environment Variables.');
+    return { isConnectionError: true };
+  }
+
   if (isConnectionError) {
     console.warn('⚠️  Database connection error:', error.message);
     return { isConnectionError: true };
@@ -109,7 +119,8 @@ app.use((req, res, next) => {
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  validate: { xForwardedForHeader: false } // Disable validation to prevent Vercel proxy errors
 });
 app.use('/api/', limiter);
 

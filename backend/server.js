@@ -16,6 +16,8 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+app.set('trust proxy', 1); // Trust first proxy
+
 // Prisma Client initialization with Accelerate support
 const prisma = new PrismaClient({
   log: ['error', 'warn'],
@@ -38,7 +40,8 @@ app.use((req, res, next) => {
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  validate: { xForwardedForHeader: false }
 });
 app.use('/api/', limiter);
 
