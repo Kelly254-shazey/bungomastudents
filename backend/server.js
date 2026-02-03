@@ -19,7 +19,6 @@ const PORT = process.env.PORT || 5001;
 // Prisma Client initialization with Accelerate support
 const prisma = new PrismaClient({
   log: ['error', 'warn'],
-  accelerateUrl: process.env.DATABASE_URL, // DATABASE_URL is the Accelerate URL in Vercel
 });
 
 // Middleware
