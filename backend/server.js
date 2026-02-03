@@ -16,12 +16,10 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Prisma Client initialization for MySQL
+// Prisma Client initialization with Accelerate support
 const prisma = new PrismaClient({
   log: ['error', 'warn'],
-  __internal: {
-    engine: 'binary',
-  },
+  accelerateUrl: process.env.DATABASE_URL, // DATABASE_URL is the Accelerate URL in Vercel
 });
 
 // Middleware
