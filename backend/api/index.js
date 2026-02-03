@@ -16,22 +16,55 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Initialize Prisma client with error handling for serverless
-let prisma;
-try {
-  if (process.env.DATABASE_URL) {
+// Initialize Prisma client with enhanced error handling for serverless
+let prisma = null;
+let prismaInitError = null;
+
+const initializePrisma = () => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      console.warn('⚠️  DATABASE_URL environment variable not set');
+      prismaInitError = 'DATABASE_URL not configured';
+      return false;
+    }
+
     prisma = new PrismaClient({
       log: ['error', 'warn'],
+      errorFormat: 'colorless',
     });
-    console.log('Prisma client initialized successfully');
-  } else {
-    console.warn('DATABASE_URL not set, Prisma client not initialized');
+    
+    console.log('✅ Prisma client initialized successfully');
+    prismaInitError = null;
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to initialize Prisma client:', error.message);
+    prismaInitError = error.message;
     prisma = null;
+    return false;
   }
-} catch (error) {
-  console.error('Failed to initialize Prisma client:', error);
-  prisma = null;
-}
+};
+
+// Initialize Prisma on startup
+initializePrisma();
+
+// Helper function to check if Prisma is available
+const isPrismaAvailable = () => prisma !== null;
+
+// Helper function to handle database errors gracefully
+const handlePrismaError = (error, fallbackData = null) => {
+  const isConnectionError = error?.code === 'P1001' || 
+                           error?.message?.includes('connect') || 
+                           error?.message?.includes('database') ||
+                           error?.message?.includes('ECONNREFUSED');
+  
+  if (isConnectionError) {
+    console.warn('⚠️  Database connection error:', error.message);
+    return { isConnectionError: true, fallbackData };
+  }
+  
+  console.error('❌ Database error:', error.message);
+  return { isConnectionError: false, error };
+};
 
 // Middleware
 app.use(helmet({
@@ -137,9 +170,42 @@ app.get('/', (req, res) => {
   res.json({
     message: 'BUCCUSA API is running',
     status: 'OK',
-    database: prisma ? 'configured' : 'not configured',
+    database: isPrismaAvailable() ? 'configured' : 'not configured',
     timestamp: new Date().toISOString()
   });
+});
+
+// Health check endpoint with detailed status
+app.get('/api/health', async (req, res) => {
+  const health = {
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    database: {
+      configured: isPrismaAvailable(),
+      error: prismaInitError || null
+    },
+    services: {
+      email: transporter !== null ? 'available' : 'unavailable'
+    }
+  };
+
+  // Try to ping database if available
+  if (isPrismaAvailable()) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      health.database.connected = true;
+      health.database.latency = 'low';
+    } catch (error) {
+      health.database.connected = false;
+      health.database.error = error.message;
+      health.status = 'DEGRADED';
+    }
+  }
+
+  const statusCode = health.status === 'OK' ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 // Routes
@@ -147,12 +213,18 @@ app.get('/', (req, res) => {
 // Admin authentication
 app.post('/api/admin/login', async (req, res) => {
   try {
-    if (!prisma) {
-      console.log('Prisma not available, admin login disabled');
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username and password required' });
+    }
 
     const admin = await prisma.admin.findUnique({
       where: { username }
@@ -179,13 +251,23 @@ app.post('/api/admin/login', async (req, res) => {
     res.json({ token, admin: { id: admin.id, username: admin.username, email: admin.email } });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
 // Public routes
 app.get('/api/programs', async (req, res) => {
   try {
+    if (!isPrismaAvailable()) {
+      console.log('Database not available, returning empty programs list');
+      return res.json([]);
+    }
+
     const programs = await prisma.program.findMany({
       orderBy: {
         id: 'asc'
@@ -193,101 +275,111 @@ app.get('/api/programs', async (req, res) => {
     });
     res.json(programs);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    const { isConnectionError, fallbackData } = handlePrismaError(error, []);
+    if (isConnectionError) {
+      return res.json(fallbackData);
+    }
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.get('/api/leaders', async (req, res) => {
   try {
-    if (!prisma) {
-      console.log('Prisma not available, returning mock leaders');
+    if (!isPrismaAvailable()) {
+      console.log('Database not available, returning mock leaders');
       return res.json([
         {
           id: 1,
           name: "John Doe",
-          position: "President",
+          title: "President",
           bio: "Dedicated to serving the BUCCUSA community",
-          image_url: null,
-          order_position: 1
+          photoUrl: null,
+          orderPosition: 1,
+          isActive: true
         }
       ]);
     }
 
     const leaders = await prisma.leader.findMany({
       orderBy: {
-        order_position: 'asc'
+        orderPosition: 'asc'
       }
     });
     res.json(leaders);
   } catch (error) {
-    console.error('Database error:', error);
-    // Return mock data if database is not available
-    if (error.code === 'P1001' || error.message.includes('connect') || error.message.includes('database')) {
-      console.log('Database not available, returning mock leaders');
-      res.json([
-        {
-          id: 1,
-          name: "John Doe",
-          position: "President",
-          bio: "Dedicated to serving the BUCCUSA community",
-          image_url: null,
-          order_position: 1
-        }
-      ]);
-    } else {
-      res.status(500).json({ message: 'Server error', error: error.message });
+    const mockData = [
+      {
+        id: 1,
+        name: "John Doe",
+        title: "President",
+        bio: "Dedicated to serving the BUCCUSA community",
+        photoUrl: null,
+        orderPosition: 1,
+        isActive: true
+      }
+    ];
+    
+    const { isConnectionError } = handlePrismaError(error, mockData);
+    if (isConnectionError) {
+      return res.json(mockData);
     }
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.get('/api/events', async (req, res) => {
   try {
-    if (!prisma) {
-      console.log('Prisma not available, returning mock events');
+    if (!isPrismaAvailable()) {
+      console.log('Database not available, returning mock events');
       return res.json([
         {
           id: 1,
           title: "BUCCUSA Orientation",
           description: "Welcome event for new students",
-          event_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          eventDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           location: "Main Campus",
-          is_upcoming: true
+          imageUrl: null,
+          isUpcoming: true,
+          createdAt: new Date().toISOString()
         }
       ]);
     }
 
     const events = await prisma.event.findMany({
       orderBy: {
-        event_date: 'desc'
+        eventDate: 'desc'
       }
     });
     res.json(events);
   } catch (error) {
-    console.error('Database error:', error);
-    // Return mock data if database is not available
-    if (error.code === 'P1001' || error.message.includes('connect') || error.message.includes('database')) {
-      console.log('Database not available, returning mock events');
-      res.json([
-        {
-          id: 1,
-          title: "BUCCUSA Orientation",
-          description: "Welcome event for new students",
-          event_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          location: "Main Campus",
-          is_upcoming: true
-        }
-      ]);
-    } else {
-      res.status(500).json({ message: 'Server error', error: error.message });
+    const mockData = [
+      {
+        id: 1,
+        title: "BUCCUSA Orientation",
+        description: "Welcome event for new students",
+        eventDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        location: "Main Campus",
+        imageUrl: null,
+        isUpcoming: true,
+        createdAt: new Date().toISOString()
+      }
+    ];
+
+    const { isConnectionError } = handlePrismaError(error, mockData);
+    if (isConnectionError) {
+      return res.json(mockData);
     }
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.get('/api/events/:id', async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     const event = await prisma.event.findUnique({
@@ -300,22 +392,29 @@ app.get('/api/events/:id', async (req, res) => {
 
     res.json(event);
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
 app.get('/api/posts', async (req, res) => {
   try {
-    if (!prisma) {
-      console.log('Prisma not available, returning mock data');
+    if (!isPrismaAvailable()) {
+      console.log('Database not available, returning mock posts');
       return res.json([
         {
           id: 1,
           title: "Welcome to BUCCUSA",
+          excerpt: "Welcome to the BUCCUSA Student Association",
           content: "Welcome to the BUCCUSA Student Association website. We're excited to have you here!",
-          published_at: new Date().toISOString(),
-          published: true
+          imageUrl: null,
+          published: true,
+          publishedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
         }
       ]);
     }
@@ -325,34 +424,39 @@ app.get('/api/posts', async (req, res) => {
         published: true
       },
       orderBy: {
-        published_at: 'desc'
+        publishedAt: 'desc'
       }
     });
     res.json(posts);
   } catch (error) {
-    console.error('Database error:', error);
-    // Return mock data if database is not available
-    if (error.code === 'P1001' || error.message.includes('connect') || error.message.includes('database')) {
-      console.log('Database not available, returning mock data');
-      res.json([
-        {
-          id: 1,
-          title: "Welcome to BUCCUSA",
-          content: "Welcome to the BUCCUSA Student Association website. We're excited to have you here!",
-          published_at: new Date().toISOString(),
-          published: true
-        }
-      ]);
-    } else {
-      res.status(500).json({ message: 'Server error', error: error.message });
+    const mockData = [
+      {
+        id: 1,
+        title: "Welcome to BUCCUSA",
+        excerpt: "Welcome to the BUCCUSA Student Association",
+        content: "Welcome to the BUCCUSA Student Association website. We're excited to have you here!",
+        imageUrl: null,
+        published: true,
+        publishedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      }
+    ];
+
+    const { isConnectionError } = handlePrismaError(error, mockData);
+    if (isConnectionError) {
+      return res.json(mockData);
     }
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.get('/api/posts/:id', async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     const post = await prisma.post.findFirst({
@@ -368,53 +472,69 @@ app.get('/api/posts/:id', async (req, res) => {
 
     res.json(post);
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
 app.get('/api/impact-stats', async (req, res) => {
   try {
-    if (!prisma) {
+    if (!isPrismaAvailable()) {
+      console.log('Database not available, returning empty impact stats');
       return res.json([]);
     }
 
     const impactStats = await prisma.impactStat.findMany();
     res.json(impactStats);
   } catch (error) {
-    console.error('Database error:', error);
+    const { isConnectionError } = handlePrismaError(error, []);
+    if (isConnectionError) {
+      return res.json([]);
+    }
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.get('/api/testimonials', async (req, res) => {
   try {
-    if (!prisma) {
+    if (!isPrismaAvailable()) {
+      console.log('Database not available, returning empty testimonials');
       return res.json([]);
     }
 
     const testimonials = await prisma.testimonial.findMany();
     res.json(testimonials);
   } catch (error) {
-    console.error('Database error:', error);
+    const { isConnectionError } = handlePrismaError(error, []);
+    if (isConnectionError) {
+      return res.json([]);
+    }
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 app.get('/api/gallery', async (req, res) => {
   try {
-    if (!prisma) {
+    if (!isPrismaAvailable()) {
+      console.log('Database not available, returning empty gallery');
       return res.json([]);
     }
 
     const gallery = await prisma.gallery.findMany({
       orderBy: {
-        created_at: 'desc'
+        createdAt: 'desc'
       }
     });
     res.json(gallery);
   } catch (error) {
-    console.error('Database error:', error);
+    const { isConnectionError } = handlePrismaError(error, []);
+    if (isConnectionError) {
+      return res.json([]);
+    }
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -429,19 +549,27 @@ app.post('/api/contact', async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    // Insert into database
-    try {
-      await prisma.contactMessage.create({
-        data: {
-          name,
-          email,
-          subject,
-          message
+    // Insert into database if available
+    if (isPrismaAvailable()) {
+      try {
+        await prisma.contactMessage.create({
+          data: {
+            name,
+            email,
+            subject,
+            message
+          }
+        });
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+        const { isConnectionError } = handlePrismaError(dbError);
+        if (!isConnectionError) {
+          return res.status(500).json({ message: 'Database error', error: dbError.message });
         }
-      });
-    } catch (dbError) {
-      console.error('Database error:', dbError);
-      return res.status(500).json({ message: 'Database error', error: dbError.message });
+        // If connection error, continue to send email anyway
+      }
+    } else {
+      console.warn('Database not available, contact message will only be sent via email');
     }
 
     // Send email notification (optional)
@@ -477,42 +605,56 @@ app.post('/api/contact', async (req, res) => {
 // Partnership form
 app.post('/api/partnership', async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     const { organizationName, contactPerson, email, phone, partnershipType, message } = req.body;
 
-    await prisma.partnershipRequest.create({
-      data: {
-        organizationName,
-        contactPerson,
-        email,
-        phone,
-        partnershipType,
-        message
+    try {
+      await prisma.partnershipRequest.create({
+        data: {
+          organizationName,
+          contactPerson,
+          email,
+          phone,
+          partnershipType,
+          message
+        }
+      });
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      const { isConnectionError } = handlePrismaError(dbError);
+      if (!isConnectionError) {
+        return res.status(500).json({ message: 'Database error', error: dbError.message });
       }
-    });
+    }
 
     // Send email notification
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: process.env.ADMIN_EMAIL || 'bungomastudent@gmail.com',
-      subject: 'New Partnership Request - BUCCUSA',
-      html: `
-        <h3>New Partnership Request</h3>
-        <p><strong>Organization:</strong> ${organizationName}</p>
-        <p><strong>Contact Person:</strong> ${contactPerson}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Phone:</strong> ${phone}</p>
-        <p><strong>Type:</strong> ${partnershipType}</p>
-        <p><strong>Message:</strong></p>
-        <p>${message}</p>
-      `
-    };
-
     if (transporter) {
-      await transporter.sendMail(mailOptions);
+      try {
+        const mailOptions = {
+          from: process.env.EMAIL_USER,
+          to: process.env.ADMIN_EMAIL || 'bungomastudent@gmail.com',
+          subject: 'New Partnership Request - BUCCUSA',
+          html: `
+            <h3>New Partnership Request</h3>
+            <p><strong>Organization:</strong> ${organizationName}</p>
+            <p><strong>Contact Person:</strong> ${contactPerson}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Phone:</strong> ${phone}</p>
+            <p><strong>Type:</strong> ${partnershipType}</p>
+            <p><strong>Message:</strong></p>
+            <p>${message}</p>
+          `
+        };
+        await transporter.sendMail(mailOptions);
+      } catch (emailError) {
+        console.error('Email error:', emailError);
+      }
     }
 
     res.json({ message: 'Partnership request submitted successfully' });
@@ -525,40 +667,54 @@ app.post('/api/partnership', async (req, res) => {
 // Volunteer form
 app.post('/api/volunteer', async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     const { name, email, phone, interests, experience } = req.body;
 
-    await prisma.volunteerSubmission.create({
-      data: {
-        name,
-        email,
-        phone,
-        interests,
-        experience
+    try {
+      await prisma.volunteerSubmission.create({
+        data: {
+          name,
+          email,
+          phone,
+          interests,
+          experience
+        }
+      });
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      const { isConnectionError } = handlePrismaError(dbError);
+      if (!isConnectionError) {
+        return res.status(500).json({ message: 'Database error', error: dbError.message });
       }
-    });
+    }
 
     // Send email notification
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: process.env.ADMIN_EMAIL || 'bungomastudent@gmail.com',
-      subject: 'New Volunteer Application - BUCCUSA',
-      html: `
-        <h3>New Volunteer Application</h3>
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Phone:</strong> ${phone}</p>
-        <p><strong>Interests:</strong> ${interests}</p>
-        <p><strong>Experience:</strong></p>
-        <p>${experience}</p>
-      `
-    };
-
     if (transporter) {
-      await transporter.sendMail(mailOptions);
+      try {
+        const mailOptions = {
+          from: process.env.EMAIL_USER,
+          to: process.env.ADMIN_EMAIL || 'bungomastudent@gmail.com',
+          subject: 'New Volunteer Application - BUCCUSA',
+          html: `
+            <h3>New Volunteer Application</h3>
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Phone:</strong> ${phone}</p>
+            <p><strong>Interests:</strong> ${interests}</p>
+            <p><strong>Experience:</strong></p>
+            <p>${experience}</p>
+          `
+        };
+        await transporter.sendMail(mailOptions);
+      } catch (emailError) {
+        console.error('Email error:', emailError);
+      }
     }
 
     res.json({ message: 'Volunteer application submitted successfully' });
@@ -571,8 +727,25 @@ app.post('/api/volunteer', async (req, res) => {
 // Admin routes (protected)
 app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError,
+        stats: {
+          unreadMessages: 0,
+          totalMessages: 0,
+          publishedPosts: 0,
+          totalPosts: 0,
+          totalEvents: 0,
+          activePrograms: 0,
+          totalPrograms: 0,
+          totalTestimonials: 0,
+          totalStats: 0,
+          activeLeaders: 0,
+          activeMembers: 0
+        },
+        recentContacts: []
+      });
     }
 
     // Get comprehensive stats using Prisma
@@ -631,45 +804,31 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
       take: 5
     });
 
-    // Get sample data counts to verify
-    const [
-      programsCount,
-      eventsCount,
-      testimonialsCount,
-      postsCount
-    ] = await Promise.all([
-      prisma.program.count(),
-      prisma.event.count(),
-      prisma.testimonial.count(),
-      prisma.post.count()
-    ]);
-
-    const sampleCounts = [
-      { table_name: 'programs', count: programsCount },
-      { table_name: 'events', count: eventsCount },
-      { table_name: 'testimonials', count: testimonialsCount },
-      { table_name: 'posts', count: postsCount }
-    ];
-
-    console.log('Dashboard stats:', stats);
-    console.log('Sample counts:', sampleCounts);
+    console.log('Dashboard stats retrieved successfully');
 
     res.json({
       stats,
-      recentContacts,
-      debug: sampleCounts
+      recentContacts
     });
   } catch (error) {
     console.error('Dashboard error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
 // CRUD operations for admin
 app.get('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     const programs = await prisma.program.findMany({
@@ -679,15 +838,22 @@ app.get('/api/admin/programs', authenticateToken, async (req, res) => {
     });
     res.json(programs);
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
 app.post('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     const { title, description, icon } = req.body;
@@ -696,43 +862,57 @@ app.post('/api/admin/programs', authenticateToken, async (req, res) => {
         title,
         description: description || null,
         icon: icon || null,
-        is_active: true
+        isActive: true
       }
     });
     res.json({ id: program.id, message: 'Program created successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
 app.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
-    const { title, description, icon, is_active } = req.body;
+    const { title, description, icon, isActive } = req.body;
     await prisma.program.update({
       where: { id: parseInt(req.params.id) },
       data: {
         title,
         description: description || null,
         icon: icon || null,
-        is_active: is_active !== undefined ? is_active : undefined
+        isActive: isActive !== undefined ? isActive : undefined
       }
     });
     res.json({ message: 'Program updated successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
 app.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     await prisma.program.delete({
@@ -740,16 +920,23 @@ app.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
     });
     res.json({ message: 'Program deleted successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
 // CRUD for Leaders (Officials)
 app.get('/api/admin/leaders', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     const leaders = await prisma.leader.findMany({
@@ -759,15 +946,22 @@ app.get('/api/admin/leaders', authenticateToken, async (req, res) => {
     });
     res.json(leaders);
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
 app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     const { name, title, bio, photoUrl } = req.body;
@@ -793,16 +987,22 @@ app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
 
     res.json({ id: leader.id, message: 'Official added successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
-
 app.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     const { name, title, bio, photoUrl, orderPosition, isActive } = req.body;
@@ -821,15 +1021,22 @@ app.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
 
     res.json({ message: 'Official updated successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
 app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ 
+        message: 'Database service unavailable',
+        error: prismaInitError 
+      });
     }
 
     await prisma.leader.delete({
@@ -838,8 +1045,12 @@ app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
 
     res.json({ message: 'Official deleted successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    const statusCode = isConnectionError ? 503 : 500;
+    res.status(statusCode).json({ 
+      message: isConnectionError ? 'Database connection failed' : 'Server error',
+      error: error.message 
+    });
   }
 });
 
@@ -847,548 +1058,349 @@ app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
 // CRUD for Members
 app.get('/api/admin/members', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    const members = await prisma.member.findMany({
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+    const members = await prisma.member.findMany({ orderBy: { createdAt: 'desc' } });
     res.json(members);
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.post('/api/admin/members', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { name, email, phone, position, department, photoUrl, bio } = req.body;
-
-    const member = await prisma.member.create({
-      data: {
-        name,
-        email,
-        phone,
-        position,
-        department,
-        photoUrl,
-        bio
-      }
-    });
-
+    const member = await prisma.member.create({ data: { name, email, phone, position, department, photoUrl, bio } });
     res.json({ id: member.id, message: 'Member added successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.put('/api/admin/members/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { name, email, phone, position, department, photoUrl, bio, isActive } = req.body;
-
-    await prisma.member.update({
-      where: { id: parseInt(req.params.id) },
-      data: {
-        name,
-        email,
-        phone,
-        position,
-        department,
-        photoUrl,
-        bio,
-        isActive
-      }
-    });
-
+    await prisma.member.update({ where: { id: parseInt(req.params.id) }, data: { name, email, phone, position, department, photoUrl, bio, isActive } });
     res.json({ message: 'Member updated successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.delete('/api/admin/members/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    await prisma.member.delete({
-      where: { id: parseInt(req.params.id) }
-    });
-
+    await prisma.member.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ message: 'Member deleted successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 // CRUD for Events
 app.get('/api/admin/events', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    const events = await prisma.event.findMany({
-      orderBy: {
-        eventDate: 'desc'
-      }
-    });
+    const events = await prisma.event.findMany({ orderBy: { eventDate: 'desc' } });
     res.json(events);
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.post('/api/admin/events', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { title, description, eventDate, location, imageUrl, isUpcoming } = req.body;
-
-    const event = await prisma.event.create({
-      data: {
-        title,
-        description,
-        eventDate: new Date(eventDate),
-        location,
-        imageUrl,
-        isUpcoming
-      }
-    });
-
+    const event = await prisma.event.create({ data: { title, description, eventDate: new Date(eventDate), location, imageUrl, isUpcoming } });
     res.json({ id: event.id, message: 'Event created successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.put('/api/admin/events/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { title, description, eventDate, location, imageUrl, isUpcoming } = req.body;
-
-    await prisma.event.update({
-      where: { id: parseInt(req.params.id) },
-      data: {
-        title,
-        description,
-        eventDate: eventDate ? new Date(eventDate) : undefined,
-        location,
-        imageUrl,
-        isUpcoming
-      }
-    });
-
+    await prisma.event.update({ where: { id: parseInt(req.params.id) }, data: { title, description, eventDate: eventDate ? new Date(eventDate) : undefined, location, imageUrl, isUpcoming } });
     res.json({ message: 'Event updated successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.delete('/api/admin/events/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    await prisma.event.delete({
-      where: { id: parseInt(req.params.id) }
-    });
-
+    await prisma.event.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 // Contact Messages Management
 app.get('/api/admin/messages', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    const messages = await prisma.contactMessage.findMany({
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+    const messages = await prisma.contactMessage.findMany({ orderBy: { createdAt: 'desc' } });
     res.json(messages);
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.post('/api/admin/messages/:id/reply', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { replyText } = req.body;
     const messageId = parseInt(req.params.id);
+    if (!replyText) return res.status(400).json({ message: 'Reply text is required' });
 
-    if (!replyText) {
-      return res.status(400).json({ message: 'Reply text is required' });
-    }
+    const message = await prisma.contactMessage.findUnique({ where: { id: messageId } });
+    if (!message) return res.status(404).json({ message: 'Message not found' });
 
-    // Get message details
-    const message = await prisma.contactMessage.findUnique({
-      where: { id: messageId }
-    });
+    await prisma.contactMessage.update({ where: { id: messageId }, data: { isRead: true } });
 
-    if (!message) {
-      return res.status(404).json({ message: 'Message not found' });
-    }
-
-    // Mark message as read
-    await prisma.contactMessage.update({
-      where: { id: messageId },
-      data: { isRead: true }
-    });
-
-    // Send email reply only if transporter is configured
     if (transporter) {
       try {
-        const mailOptions = {
+        await transporter.sendMail({
           from: process.env.EMAIL_USER,
           to: message.email,
           subject: `Re: ${message.subject}`,
-          html: `
-            <h3>Thank you for your message</h3>
-            <p>Dear ${message.name},</p>
-            <p>${replyText}</p>
-            <p>Best regards,<br>BUCCUSA Team</p>
-          `
-        };
-        await transporter.sendMail(mailOptions);
+          html: `<h3>Thank you for your message</h3><p>Dear ${message.name},</p><p>${replyText}</p><p>Best regards,<br>BUCCUSA Team</p>`
+        });
       } catch (emailError) {
-        console.error('Email sending failed:', emailError);
+        console.error('Email error:', emailError);
         return res.json({ message: 'Reply saved but email sending failed' });
       }
     }
-
     res.json({ message: 'Reply sent successfully' });
   } catch (error) {
-    console.error('Reply error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.put('/api/admin/messages/:id/read', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    await prisma.contactMessage.update({
-      where: { id: parseInt(req.params.id) },
-      data: { isRead: true }
-    });
-
+    await prisma.contactMessage.update({ where: { id: parseInt(req.params.id) }, data: { isRead: true } });
     res.json({ message: 'Message marked as read' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.delete('/api/admin/messages/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    await prisma.contactMessage.delete({
-      where: { id: parseInt(req.params.id) }
-    });
-
+    await prisma.contactMessage.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ message: 'Message deleted successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 // CRUD for Posts (Announcements)
 app.get('/api/admin/posts', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    const posts = await prisma.post.findMany({
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+    const posts = await prisma.post.findMany({ orderBy: { createdAt: 'desc' } });
     res.json(posts);
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.post('/api/admin/posts', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { title, content, excerpt, imageUrl, published } = req.body;
-
-    const post = await prisma.post.create({
-      data: {
-        title,
-        content,
-        excerpt,
-        imageUrl,
-        published,
-        publishedAt: published ? new Date() : null
-      }
-    });
-
+    const post = await prisma.post.create({ data: { title, content, excerpt, imageUrl, published, publishedAt: published ? new Date() : null } });
     res.json({ id: post.id, message: 'Post created successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.put('/api/admin/posts/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { title, content, excerpt, imageUrl, published } = req.body;
-
-    await prisma.post.update({
-      where: { id: parseInt(req.params.id) },
-      data: {
-        title,
-        content,
-        excerpt,
-        imageUrl,
-        published,
-        publishedAt: published ? new Date() : null
-      }
-    });
-
+    await prisma.post.update({ where: { id: parseInt(req.params.id) }, data: { title, content, excerpt, imageUrl, published, publishedAt: published ? new Date() : null } });
     res.json({ message: 'Post updated successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    await prisma.post.delete({
-      where: { id: parseInt(req.params.id) }
-    });
-
+    await prisma.post.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ message: 'Post deleted successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 // CRUD for Testimonials
 app.get('/api/admin/testimonials', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    const testimonials = await prisma.testimonial.findMany({
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+    const testimonials = await prisma.testimonial.findMany({ orderBy: { createdAt: 'desc' } });
     res.json(testimonials);
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.post('/api/admin/testimonials', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { name, role, content, image } = req.body;
-
-    const testimonial = await prisma.testimonial.create({
-      data: {
-        name,
-        role,
-        content,
-        image
-      }
-    });
-
+    const testimonial = await prisma.testimonial.create({ data: { name, role, content, image } });
     res.json({ id: testimonial.id, message: 'Testimonial created successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.put('/api/admin/testimonials/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { name, role, content, image } = req.body;
-
-    await prisma.testimonial.update({
-      where: { id: parseInt(req.params.id) },
-      data: {
-        name,
-        role,
-        content,
-        image
-      }
-    });
-
+    await prisma.testimonial.update({ where: { id: parseInt(req.params.id) }, data: { name, role, content, image } });
     res.json({ message: 'Testimonial updated successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.delete('/api/admin/testimonials/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    await prisma.testimonial.delete({
-      where: { id: parseInt(req.params.id) }
-    });
-
+    await prisma.testimonial.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ message: 'Testimonial deleted successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 // CRUD for Impact Stats
 app.get('/api/admin/impact-stats', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    const impactStats = await prisma.impactStat.findMany({
-      orderBy: {
-        id: 'asc'
-      }
-    });
+    const impactStats = await prisma.impactStat.findMany({ orderBy: { id: 'asc' } });
     res.json(impactStats);
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.post('/api/admin/impact-stats', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { number, label, icon } = req.body;
-
-    const impactStat = await prisma.impactStat.create({
-      data: {
-        number: parseInt(number),
-        label,
-        icon: icon || 'users'
-      }
-    });
-
+    const impactStat = await prisma.impactStat.create({ data: { number: parseInt(number), label, icon: icon || 'users' } });
     res.json({ id: impactStat.id, message: 'Stat created successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.put('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
     const { number, label, icon } = req.body;
-
-    await prisma.impactStat.update({
-      where: { id: parseInt(req.params.id) },
-      data: {
-        number: parseInt(number),
-        label,
-        icon: icon || 'users'
-      }
-    });
-
+    await prisma.impactStat.update({ where: { id: parseInt(req.params.id) }, data: { number: parseInt(number), label, icon: icon || 'users' } });
     res.json({ message: 'Stat updated successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
 app.delete('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
   try {
-    if (!prisma) {
-      return res.status(503).json({ message: 'Database not available' });
+    if (!isPrismaAvailable()) {
+      return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-
-    await prisma.impactStat.delete({
-      where: { id: parseInt(req.params.id) }
-    });
-
+    await prisma.impactStat.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ message: 'Stat deleted successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const { isConnectionError } = handlePrismaError(error);
+    res.status(isConnectionError ? 503 : 500).json({ message: isConnectionError ? 'Database connection failed' : 'Server error', error: error.message });
   }
 });
 
