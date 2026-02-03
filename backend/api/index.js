@@ -274,7 +274,7 @@ app.get('/api/leaders', async (req, res) => {
 
     const leaders = await prisma.leader.findMany({
       orderBy: {
-        orderPosition: 'asc'
+        order_position: 'asc'
       }
     });
     res.json(leaders);
@@ -293,7 +293,7 @@ app.get('/api/events', async (req, res) => {
 
     const events = await prisma.event.findMany({
       orderBy: {
-        eventDate: 'desc'
+        event_date: 'desc'
       }
     });
     res.json(events);
@@ -343,7 +343,7 @@ app.get('/api/posts', async (req, res) => {
         published: true
       },
       orderBy: {
-        publishedAt: 'desc'
+        published_at: 'desc'
       }
     });
     res.json(posts);
@@ -391,7 +391,7 @@ app.get('/api/impact-stats', async (req, res) => {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
 
-    const impactStats = await prisma.impactStat.findMany();
+    const impactStats = await prisma.impactStat.findMany(); // Assuming model name is ImpactStat from seed.js
     res.json(impactStats);
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -423,7 +423,7 @@ app.get('/api/gallery', async (req, res) => {
 
     const gallery = await prisma.gallery.findMany({
       orderBy: {
-        createdAt: 'desc'
+        created_at: 'desc'
       }
     });
     res.json(gallery);
@@ -446,7 +446,7 @@ app.post('/api/contact', async (req, res) => {
 
     // Insert into database if available
     if (isPrismaAvailable()) {
-      try {
+      try { // Assuming model name is ContactMessage from seed.js
         await prisma.contactMessage.create({
           data: {
             name,
@@ -510,13 +510,13 @@ app.post('/api/partnership', async (req, res) => {
     const { organizationName, contactPerson, email, phone, partnershipType, message } = req.body;
 
     try {
-      await prisma.partnershipRequest.create({
+      await prisma.partnershipRequest.create({ // Assuming model name is PartnershipRequest
         data: {
-          organizationName,
-          contactPerson,
+          organization_name: organizationName,
+          contact_person: contactPerson,
           email,
           phone,
-          partnershipType,
+          partnership_type: partnershipType,
           message
         }
       });
@@ -572,7 +572,7 @@ app.post('/api/volunteer', async (req, res) => {
     const { name, email, phone, interests, experience } = req.body;
 
     try {
-      await prisma.volunteerSubmission.create({
+      await prisma.volunteerSubmission.create({ // Assuming model name is VolunteerSubmission
         data: {
           name,
           email,
@@ -643,17 +643,17 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
       activeLeaders,
       activeMembers
     ] = await Promise.all([
-      prisma.contactMessage.count({ where: { isRead: false } }),
+      prisma.contactMessage.count({ where: { is_read: false } }),
       prisma.contactMessage.count(),
       prisma.post.count({ where: { published: true } }),
       prisma.post.count(),
       prisma.event.count(),
-      prisma.program.count({ where: { isActive: true } }),
+      prisma.program.count({ where: { is_active: true } }),
       prisma.program.count(),
       prisma.testimonial.count(),
       prisma.impactStat.count(),
-      prisma.leader.count({ where: { isActive: true } }),
-      prisma.member.count({ where: { isActive: true } })
+      prisma.leader.count({ where: { is_active: true } }),
+      prisma.member.count({ where: { is_active: true } })
     ]);
 
     const stats = {
@@ -677,10 +677,10 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
         name: true,
         email: true,
         subject: true,
-        createdAt: true
+        created_at: true
       },
       orderBy: {
-        createdAt: 'desc'
+        created_at: 'desc'
       },
       take: 5
     });
@@ -743,7 +743,7 @@ app.post('/api/admin/programs', authenticateToken, async (req, res) => {
         title,
         description: description || null,
         icon: icon || null,
-        isActive: true
+        is_active: true
       }
     });
     res.json({ id: program.id, message: 'Program created successfully' });
@@ -766,14 +766,14 @@ app.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    const { title, description, icon, isActive } = req.body;
+    const { title, description, icon, is_active } = req.body;
     await prisma.program.update({
       where: { id: parseInt(req.params.id) },
       data: {
         title,
         description: description || null,
         icon: icon || null,
-        isActive: isActive !== undefined ? isActive : undefined
+        is_active: is_active !== undefined ? is_active : undefined
       }
     });
     res.json({ message: 'Program updated successfully' });
@@ -822,7 +822,7 @@ app.get('/api/admin/leaders', authenticateToken, async (req, res) => {
 
     const leaders = await prisma.leader.findMany({
       orderBy: {
-        orderPosition: 'asc'
+        order_position: 'asc'
       }
     });
     res.json(leaders);
@@ -845,24 +845,24 @@ app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
       });
     }
 
-    const { name, title, bio, photoUrl } = req.body;
+    const { name, title, bio, photo_url } = req.body;
 
     // Get max order_position
     const maxOrder = await prisma.leader.aggregate({
       _max: {
-        orderPosition: true
+        order_position: true
       }
     });
-    const nextOrder = (maxOrder._max.orderPosition || 0) + 1;
+    const nextOrder = (maxOrder._max.order_position || 0) + 1;
 
     const leader = await prisma.leader.create({
       data: {
         name,
         title,
         bio,
-        photoUrl,
-        orderPosition: nextOrder,
-        isActive: true
+        photo_url,
+        order_position: nextOrder,
+        is_active: true
       }
     });
 
@@ -886,7 +886,7 @@ app.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    const { name, title, bio, photoUrl, orderPosition, isActive } = req.body;
+    const { name, title, bio, photo_url, order_position, is_active } = req.body;
 
     await prisma.leader.update({
       where: { id: parseInt(req.params.id) },
@@ -894,9 +894,9 @@ app.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
         name,
         title,
         bio,
-        photoUrl,
-        orderPosition,
-        isActive
+        photo_url,
+        order_position: order_position,
+        is_active: is_active
       }
     });
 
@@ -942,7 +942,7 @@ app.get('/api/admin/members', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const members = await prisma.member.findMany({ orderBy: { createdAt: 'desc' } });
+    const members = await prisma.member.findMany({ orderBy: { created_at: 'desc' } });
     res.json(members);
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -955,8 +955,8 @@ app.post('/api/admin/members', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const { name, email, phone, position, department, photoUrl, bio } = req.body;
-    const member = await prisma.member.create({ data: { name, email, phone, position, department, photoUrl, bio } });
+    const { name, email, phone, position, department, photo_url, bio } = req.body;
+    const member = await prisma.member.create({ data: { name, email, phone, position, department, photo_url, bio } });
     res.json({ id: member.id, message: 'Member added successfully' });
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -969,8 +969,8 @@ app.put('/api/admin/members/:id', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const { name, email, phone, position, department, photoUrl, bio, isActive } = req.body;
-    await prisma.member.update({ where: { id: parseInt(req.params.id) }, data: { name, email, phone, position, department, photoUrl, bio, isActive } });
+    const { name, email, phone, position, department, photo_url, bio, is_active } = req.body;
+    await prisma.member.update({ where: { id: parseInt(req.params.id) }, data: { name, email, phone, position, department, photo_url, bio, is_active } });
     res.json({ message: 'Member updated successfully' });
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -997,7 +997,7 @@ app.get('/api/admin/events', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const events = await prisma.event.findMany({ orderBy: { eventDate: 'desc' } });
+    const events = await prisma.event.findMany({ orderBy: { event_date: 'desc' } });
     res.json(events);
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -1010,8 +1010,8 @@ app.post('/api/admin/events', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const { title, description, eventDate, location, imageUrl, isUpcoming } = req.body;
-    const event = await prisma.event.create({ data: { title, description, eventDate: new Date(eventDate), location, imageUrl, isUpcoming } });
+    const { title, description, event_date, location, image_url, is_upcoming } = req.body;
+    const event = await prisma.event.create({ data: { title, description, event_date: new Date(event_date), location, image_url, is_upcoming } });
     res.json({ id: event.id, message: 'Event created successfully' });
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -1024,8 +1024,8 @@ app.put('/api/admin/events/:id', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const { title, description, eventDate, location, imageUrl, isUpcoming } = req.body;
-    await prisma.event.update({ where: { id: parseInt(req.params.id) }, data: { title, description, eventDate: eventDate ? new Date(eventDate) : undefined, location, imageUrl, isUpcoming } });
+    const { title, description, event_date, location, image_url, is_upcoming } = req.body;
+    await prisma.event.update({ where: { id: parseInt(req.params.id) }, data: { title, description, event_date: event_date ? new Date(event_date) : undefined, location, image_url, is_upcoming } });
     res.json({ message: 'Event updated successfully' });
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -1052,7 +1052,7 @@ app.get('/api/admin/messages', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const messages = await prisma.contactMessage.findMany({ orderBy: { createdAt: 'desc' } });
+    const messages = await prisma.contactMessage.findMany({ orderBy: { created_at: 'desc' } });
     res.json(messages);
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -1065,14 +1065,14 @@ app.post('/api/admin/messages/:id/reply', authenticateToken, async (req, res) =>
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const { replyText } = req.body;
+    const { reply_text } = req.body;
     const messageId = parseInt(req.params.id);
-    if (!replyText) return res.status(400).json({ message: 'Reply text is required' });
+    if (!reply_text) return res.status(400).json({ message: 'Reply text is required' });
 
     const message = await prisma.contactMessage.findUnique({ where: { id: messageId } });
     if (!message) return res.status(404).json({ message: 'Message not found' });
 
-    await prisma.contactMessage.update({ where: { id: messageId }, data: { isRead: true } });
+    await prisma.contactMessage.update({ where: { id: messageId }, data: { is_read: true } });
 
     if (transporter) {
       try {
@@ -1080,7 +1080,7 @@ app.post('/api/admin/messages/:id/reply', authenticateToken, async (req, res) =>
           from: process.env.EMAIL_USER,
           to: message.email,
           subject: `Re: ${message.subject}`,
-          html: `<h3>Thank you for your message</h3><p>Dear ${message.name},</p><p>${replyText}</p><p>Best regards,<br>BUCCUSA Team</p>`
+          html: `<h3>Thank you for your message</h3><p>Dear ${message.name},</p><p>${reply_text}</p><p>Best regards,<br>BUCCUSA Team</p>`
         });
       } catch (emailError) {
         console.error('Email error:', emailError);
@@ -1099,7 +1099,7 @@ app.put('/api/admin/messages/:id/read', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    await prisma.contactMessage.update({ where: { id: parseInt(req.params.id) }, data: { isRead: true } });
+    await prisma.contactMessage.update({ where: { id: parseInt(req.params.id) }, data: { is_read: true } });
     res.json({ message: 'Message marked as read' });
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -1126,7 +1126,7 @@ app.get('/api/admin/posts', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const posts = await prisma.post.findMany({ orderBy: { createdAt: 'desc' } });
+    const posts = await prisma.post.findMany({ orderBy: { created_at: 'desc' } });
     res.json(posts);
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -1139,8 +1139,8 @@ app.post('/api/admin/posts', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const { title, content, excerpt, imageUrl, published } = req.body;
-    const post = await prisma.post.create({ data: { title, content, excerpt, imageUrl, published, publishedAt: published ? new Date() : null } });
+    const { title, content, excerpt, image_url, published } = req.body;
+    const post = await prisma.post.create({ data: { title, content, excerpt, image_url, published, published_at: published ? new Date() : null } });
     res.json({ id: post.id, message: 'Post created successfully' });
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -1153,8 +1153,8 @@ app.put('/api/admin/posts/:id', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const { title, content, excerpt, imageUrl, published } = req.body;
-    await prisma.post.update({ where: { id: parseInt(req.params.id) }, data: { title, content, excerpt, imageUrl, published, publishedAt: published ? new Date() : null } });
+    const { title, content, excerpt, image_url, published } = req.body;
+    await prisma.post.update({ where: { id: parseInt(req.params.id) }, data: { title, content, excerpt, image_url, published, published_at: published ? new Date() : null } });
     res.json({ message: 'Post updated successfully' });
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -1181,7 +1181,7 @@ app.get('/api/admin/testimonials', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const testimonials = await prisma.testimonial.findMany({ orderBy: { createdAt: 'desc' } });
+    const testimonials = await prisma.testimonial.findMany({ orderBy: { created_at: 'desc' } });
     res.json(testimonials);
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
@@ -1236,7 +1236,7 @@ app.get('/api/admin/impact-stats', authenticateToken, async (req, res) => {
     if (!isPrismaAvailable()) {
       return res.status(503).json({ message: 'Database service unavailable', error: prismaInitError });
     }
-    const impactStats = await prisma.impactStat.findMany({ orderBy: { id: 'asc' } });
+    const impactStats = await prisma.impactStat.findMany({ orderBy: { id: 'asc' } }); // Assuming model name is ImpactStat
     res.json(impactStats);
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
