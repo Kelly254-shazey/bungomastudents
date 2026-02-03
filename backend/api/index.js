@@ -22,24 +22,22 @@ let prismaInitError = null;
 
 const initializePrisma = () => {
   try {
-    if (!process.env.DATABASE_URL) {
-      console.warn('⚠️  DATABASE_URL environment variable not set');
-      prismaInitError = 'DATABASE_URL not configured';
+    // This bridge looks for the prefixed names you set in the Vercel UI
+    const dbUrl = process.env.STORAGE_DATABASE_URL || process.env.DATABASE_URL;
+    const accelUrl = process.env.STORAGE_PRISMA_DATABASE_URL || process.env.PRISMA_DATABASE_URL;
+
+    if (!dbUrl && !accelUrl) {
+      prismaInitError = 'Database not configured - Check STORAGE_ prefix';
       return false;
     }
 
     prisma = new PrismaClient({
-      log: ['error', 'warn'],
-      errorFormat: 'colorless',
+      datasources: { db: { url: accelUrl || dbUrl } }
     });
     
-    console.log('✅ Prisma client initialized successfully');
-    prismaInitError = null;
     return true;
   } catch (error) {
-    console.error('❌ Failed to initialize Prisma client:', error.message);
     prismaInitError = error.message;
-    prisma = null;
     return false;
   }
 };
