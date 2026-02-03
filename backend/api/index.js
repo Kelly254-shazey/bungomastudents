@@ -26,13 +26,16 @@ const initializePrisma = () => {
     const dbUrl = process.env.STORAGE_DATABASE_URL || process.env.DATABASE_URL;
     const accelUrl = process.env.STORAGE_PRISMA_DATABASE_URL || process.env.PRISMA_DATABASE_URL;
 
-    if (!dbUrl && !accelUrl) {
+    // Prioritize direct dbUrl to avoid P6002 (Invalid API Key) errors from broken Accelerate config
+    const connectionUrl = dbUrl || accelUrl;
+
+    if (!connectionUrl) {
       prismaInitError = 'Database not configured - Check STORAGE_ prefix';
       return false;
     }
 
     prisma = new PrismaClient({
-      datasources: { db: { url: accelUrl || dbUrl } }
+      datasources: { db: { url: connectionUrl } }
     });
     
     return true;

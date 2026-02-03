@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "build": "prisma generate && node api/index.js",
+    "build": "prisma generate",
     "postinstall": "prisma generate",
     "seed": "node prisma/seed.js",
     "deploy": "vercel --prod"
