@@ -159,6 +159,28 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Database connection check
+app.get('/api/db-check', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    const adminCount = await prisma.admin.count();
+    res.json({ 
+      database: 'connected', 
+      status: 'OK',
+      adminCount,
+      timestamp: new Date().toISOString() 
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      database: 'disconnected', 
+      status: 'ERROR',
+      error: error.message,
+      code: error.code,
+      timestamp: new Date().toISOString() 
+    });
+  }
+});
+
 // Root route
 app.get('/', (req, res) => {
   res.json({ message: 'BUCCUSA API Server', status: 'running' });
