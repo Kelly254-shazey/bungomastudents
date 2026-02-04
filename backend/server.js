@@ -296,6 +296,65 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
+app.get('/api/posts', async (req, res) => {
+  try {
+    const posts = await prisma.post.findMany({ where: { published: true }, orderBy: { published_at: 'desc' } });
+    res.json(posts);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/testimonials', async (req, res) => {
+  try {
+    const testimonials = await prisma.testimonial.findMany({ where: { is_active: true } });
+    const formattedTestimonials = testimonials.map(t => ({
+      id: t.id,
+      name: t.name,
+      role: t.position,
+      content: t.message,
+      image: t.photo_url
+    }));
+    res.json(formattedTestimonials);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/impact-stats', async (req, res) => {
+  try {
+    const stats = await prisma.impactStat.findMany({ where: { is_active: true }, orderBy: { id: 'asc' } });
+    const formattedStats = stats.map(s => ({
+      id: s.id,
+      number: s.value,
+      label: s.label,
+      icon: s.icon,
+      suffix: s.suffix
+    }));
+    res.json(formattedStats);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/gallery', async (req, res) => {
+  try {
+    const gallery = await prisma.gallery.findMany({ orderBy: { created_at: 'desc' } });
+    res.json(gallery);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});nts);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 app.get('/events/:id', async (req, res) => {
   try {
     const event = await prisma.event.findUnique({ where: { id: Number(req.params.id) } });
