@@ -348,11 +348,6 @@ app.get('/api/gallery', async (req, res) => {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
-});nts);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
 });
 
 app.get('/events/:id', async (req, res) => {
