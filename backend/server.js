@@ -166,6 +166,50 @@ router.get('/events', async (req, res) => {
   }
 });
 
+// Admin events
+router.get('/api/admin/events', authenticateToken, async (req, res) => {
+  try {
+    const events = await prisma.event.findMany({ orderBy: { event_date: 'desc' } });
+    res.json(events);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.post('/api/admin/events', authenticateToken, async (req, res) => {
+  try {
+    const { title, description, event_date, location, image_url, is_upcoming } = req.body;
+    const event = await prisma.event.create({
+      data: { title, description, event_date: new Date(event_date), location, image_url, is_upcoming: is_upcoming ?? true }
+    });
+    res.json({ id: event.id, message: 'Event created successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.put('/api/admin/events/:id', authenticateToken, async (req, res) => {
+  try {
+    const { title, description, event_date, location, image_url, is_upcoming } = req.body;
+    await prisma.event.update({
+      where: { id: Number(req.params.id) },
+      data: { title, description, event_date: new Date(event_date), location, image_url, is_upcoming }
+    });
+    res.json({ message: 'Event updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.delete('/api/admin/events/:id', authenticateToken, async (req, res) => {
+  try {
+    await prisma.event.delete({ where: { id: Number(req.params.id) } });
+    res.json({ message: 'Event deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 router.get('/gallery', async (req, res) => {
   try {
     const gallery = await prisma.gallery.findMany({ where: { is_active: true }, orderBy: { created_at: 'desc' } });
