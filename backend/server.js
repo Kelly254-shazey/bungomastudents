@@ -284,6 +284,19 @@ app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// File upload route
+app.post('/api/admin/upload', authenticateToken, async (req, res) => {
+  try {
+    // This would need multer and cloudinary setup
+    res.status(501).json({ 
+      message: 'Upload not configured', 
+      note: 'Add CLOUDINARY_API_SECRET to enable uploads' 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
