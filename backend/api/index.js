@@ -10,6 +10,8 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 require('dotenv').config();
 
@@ -98,7 +100,14 @@ const handlePrismaError = (error) => {
 
 // Middleware
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "blob:"],
+      "img-src": ["'self'", "data:", "https:", "blob:", "res.cloudinary.com"],
+    },
+  },
 }));
 app.use(cors({
   origin: ['https://bgfront.vercel.app', 'http://localhost:3000'],
@@ -124,20 +133,33 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// File upload configuration - Note: In serverless, file storage is temporary
-// For production, consider using Vercel Blob or cloud storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join('/tmp', 'uploads'); // Use /tmp for serverless
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
+// File upload configuration
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dqdyjocsq',
+  api_key: process.env.CLOUDINARY_API_KEY || '927174813129114',
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
+
+const storage = process.env.CLOUDINARY_API_SECRET
+  ? new CloudinaryStorage({
+      cloudinary: cloudinary,
+      params: {
+        folder: 'bungoma-uploads',
+        allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
+      },
+    })
+  : multer.diskStorage({
+      destination: (req, file, cb) => {
+        const uploadDir = path.join('/tmp', 'uploads'); // Use /tmp for serverless
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+      },
+      filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+      }
+    });
 
 const upload = multer({
   storage,
@@ -1337,14 +1359,33 @@ app.delete('/api/admin/impact-stats/:id', authenticateToken, async (req, res) =>
 });
 
 // File upload route
-app.post('/api/admin/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
+
+  let imageUrl;
+  if (req.file.path && req.file.path.startsWith('http')) {
+    imageUrl = req.file.path; // Cloudinary URL
+  } else {
+    imageUrl = `/uploads/${req.file.filename}`; // Local URL
+  }
+
+  if (isPrismaAvailable()) {
+    try {
+      await prisma.gallery.create({
+        data: { image_url: imageUrl, caption: req.body.caption || req.file.originalname }
+      });
+    } catch (error) {
+      console.error('Error saving to gallery:', error);
+      return res.status(500).json({ message: 'Error saving to gallery', error: error.message });
+    }
+  }
+
   res.json({
     message: 'File uploaded successfully',
     filename: req.file.filename,
-    url: `/uploads/${req.file.filename}`
+    url: imageUrl
   });
 });
 
