@@ -216,9 +216,6 @@ async function main() {
   await prisma.testimonial.create({
     data: {
       name: 'Dandelvin',
-      content: 'BUCCUSA has transformed my leadership skills and connected me with amazing opportunities.',
-      role: 'Former Student Leader',
-      image: null,
       message: 'BUCCUSA has transformed my leadership skills and connected me with amazing opportunities.',
       position: 'Former Student Leader',
       photo_url: null,
@@ -242,6 +239,76 @@ async function main() {
         update: {},
         create: member
       });
+    }
+  }
+
+  // Seed Gallery from Leaders, Members, Events, and Posts
+  console.log('🖼️ Seeding gallery from all entities...');
+  for (const leader of leadersData) {
+    if (leader.photo_url) {
+      const existing = await prisma.gallery.findFirst({
+        where: { image_url: leader.photo_url }
+      });
+      if (!existing) {
+        await prisma.gallery.create({
+          data: {
+            image_url: leader.photo_url,
+            title: `${leader.name} - ${leader.title}`,
+            created_at: new Date(leader.created_at)
+          }
+        });
+      }
+    }
+  }
+
+  for (const member of membersData) {
+    if (member.photo_url) {
+      const existing = await prisma.gallery.findFirst({
+        where: { image_url: member.photo_url }
+      });
+      if (!existing) {
+        await prisma.gallery.create({
+          data: {
+            image_url: member.photo_url,
+            title: `${member.name} - ${member.position || 'Member'}`,
+            created_at: new Date(member.created_at)
+          }
+        });
+      }
+    }
+  }
+
+  for (const event of eventsData) {
+    if (event.image_url) {
+      const existing = await prisma.gallery.findFirst({
+        where: { image_url: event.image_url }
+      });
+      if (!existing) {
+        await prisma.gallery.create({
+          data: {
+            image_url: event.image_url,
+            title: `Event: ${event.title}`,
+            created_at: new Date(event.created_at)
+          }
+        });
+      }
+    }
+  }
+
+  for (const post of postsData) {
+    if (post.image_url) {
+      const existing = await prisma.gallery.findFirst({
+        where: { image_url: post.image_url }
+      });
+      if (!existing) {
+        await prisma.gallery.create({
+          data: {
+            image_url: post.image_url,
+            title: `Post: ${post.title}`,
+            created_at: new Date(post.created_at)
+          }
+        });
+      }
     }
   }
 
