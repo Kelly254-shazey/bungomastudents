@@ -45,7 +45,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Admin login
-router.post('/admin/login', async (req, res) => {
+router.post('/api/admin/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     const admin = await prisma.admin.findUnique({ where: { username } });
@@ -101,12 +101,20 @@ router.post('/contact', async (req, res) => {
 });
 
 // Admin dashboard
-router.get('/admin/dashboard', authenticateToken, async (req, res) => {
+router.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
   try {
     const stats = {
+      unread_messages: await prisma.contactMessage.count({ where: { is_read: false } }),
       total_messages: await prisma.contactMessage.count(),
+      published_posts: await prisma.post.count({ where: { published: true } }),
       total_posts: await prisma.post.count(),
-      total_programs: await prisma.program.count()
+      total_events: await prisma.event.count(),
+      active_programs: await prisma.program.count({ where: { is_active: true } }),
+      total_programs: await prisma.program.count(),
+      total_testimonials: await prisma.testimonial.count(),
+      total_stats: await prisma.impactStat.count(),
+      active_leaders: await prisma.leader.count({ where: { is_active: true } }),
+      active_members: await prisma.member.count({ where: { is_active: true } })
     };
     const recentContacts = await prisma.contactMessage.findMany({
       select: { id: true, name: true, email: true, subject: true, created_at: true },
@@ -115,12 +123,13 @@ router.get('/admin/dashboard', authenticateToken, async (req, res) => {
     });
     res.json({ stats, recentContacts });
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    console.error('Dashboard error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 // Admin messages
-router.get('/admin/messages', authenticateToken, async (req, res) => {
+router.get('/api/admin/messages', authenticateToken, async (req, res) => {
   try {
     const messages = await prisma.contactMessage.findMany({ orderBy: { created_at: 'desc' } });
     res.json(messages);
@@ -129,7 +138,7 @@ router.get('/admin/messages', authenticateToken, async (req, res) => {
   }
 });
 
-router.delete('/admin/messages/:id', authenticateToken, async (req, res) => {
+router.delete('/api/admin/messages/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.contactMessage.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Message deleted successfully' });
@@ -176,7 +185,7 @@ router.get('/impact-stats', async (req, res) => {
 });
 
 // Admin routes
-router.get('/admin/leaders', authenticateToken, async (req, res) => {
+router.get('/api/admin/leaders', authenticateToken, async (req, res) => {
   try {
     const leaders = await prisma.leader.findMany({ orderBy: { order_position: 'asc' } });
     res.json(leaders);
@@ -185,7 +194,7 @@ router.get('/admin/leaders', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/admin/leaders', authenticateToken, async (req, res) => {
+router.post('/api/admin/leaders', authenticateToken, async (req, res) => {
   try {
     const { name, position, bio, image_url, order_position } = req.body;
     const leader = await prisma.leader.create({
@@ -197,7 +206,7 @@ router.post('/admin/leaders', authenticateToken, async (req, res) => {
   }
 });
 
-router.put('/admin/leaders/:id', authenticateToken, async (req, res) => {
+router.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
   try {
     const { name, position, bio, image_url, order_position } = req.body;
     await prisma.leader.update({
@@ -210,7 +219,7 @@ router.put('/admin/leaders/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.delete('/admin/leaders/:id', authenticateToken, async (req, res) => {
+router.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.leader.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Leader deleted successfully' });
@@ -219,7 +228,7 @@ router.delete('/admin/leaders/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.get('/admin/programs', authenticateToken, async (req, res) => {
+router.get('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
     const programs = await prisma.program.findMany({ orderBy: { id: 'asc' } });
     res.json(programs);
@@ -228,7 +237,7 @@ router.get('/admin/programs', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/admin/programs', authenticateToken, async (req, res) => {
+router.post('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
     const { title, description, icon } = req.body;
     const program = await prisma.program.create({
@@ -240,7 +249,7 @@ router.post('/admin/programs', authenticateToken, async (req, res) => {
   }
 });
 
-router.put('/admin/programs/:id', authenticateToken, async (req, res) => {
+router.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
     const { title, description, icon } = req.body;
     await prisma.program.update({
@@ -253,7 +262,7 @@ router.put('/admin/programs/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.delete('/admin/programs/:id', authenticateToken, async (req, res) => {
+router.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.program.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Program deleted successfully' });
@@ -262,7 +271,7 @@ router.delete('/admin/programs/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.get('/admin/posts', authenticateToken, async (req, res) => {
+router.get('/api/admin/posts', authenticateToken, async (req, res) => {
   try {
     const posts = await prisma.post.findMany({ orderBy: { created_at: 'desc' } });
     res.json(posts);
@@ -271,7 +280,7 @@ router.get('/admin/posts', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/admin/posts', authenticateToken, async (req, res) => {
+router.post('/api/admin/posts', authenticateToken, async (req, res) => {
   try {
     const { title, content, excerpt, image_url, published } = req.body;
     const post = await prisma.post.create({
@@ -283,7 +292,7 @@ router.post('/admin/posts', authenticateToken, async (req, res) => {
   }
 });
 
-router.put('/admin/posts/:id', authenticateToken, async (req, res) => {
+router.put('/api/admin/posts/:id', authenticateToken, async (req, res) => {
   try {
     const { title, content, excerpt, image_url, published } = req.body;
     await prisma.post.update({
@@ -296,7 +305,7 @@ router.put('/admin/posts/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.delete('/admin/posts/:id', authenticateToken, async (req, res) => {
+router.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.post.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Post deleted successfully' });
@@ -305,8 +314,96 @@ router.delete('/admin/posts/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Admin testimonials
+router.get('/api/admin/testimonials', authenticateToken, async (req, res) => {
+  try {
+    const testimonials = await prisma.testimonial.findMany({ orderBy: { created_at: 'desc' } });
+    res.json(testimonials);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.post('/api/admin/testimonials', authenticateToken, async (req, res) => {
+  try {
+    const { name, message, position, photo_url, is_active } = req.body;
+    const testimonial = await prisma.testimonial.create({
+      data: { name, message, position, photo_url, is_active: is_active ?? true }
+    });
+    res.json({ id: testimonial.id, message: 'Testimonial created successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.put('/api/admin/testimonials/:id', authenticateToken, async (req, res) => {
+  try {
+    const { name, message, position, photo_url, is_active } = req.body;
+    await prisma.testimonial.update({
+      where: { id: Number(req.params.id) },
+      data: { name, message, position, photo_url, is_active }
+    });
+    res.json({ message: 'Testimonial updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.delete('/api/admin/testimonials/:id', authenticateToken, async (req, res) => {
+  try {
+    await prisma.testimonial.delete({ where: { id: Number(req.params.id) } });
+    res.json({ message: 'Testimonial deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Admin impact stats
+router.get('/api/admin/impact-stats', authenticateToken, async (req, res) => {
+  try {
+    const stats = await prisma.impactStat.findMany({ orderBy: { id: 'asc' } });
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.post('/api/admin/impact-stats', authenticateToken, async (req, res) => {
+  try {
+    const { label, icon, value, suffix, is_active } = req.body;
+    const stat = await prisma.impactStat.create({
+      data: { label, icon, value: Number(value), suffix: suffix || '', is_active: is_active ?? true }
+    });
+    res.json({ id: stat.id, message: 'Impact stat created successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.put('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
+  try {
+    const { label, icon, value, suffix, is_active } = req.body;
+    await prisma.impactStat.update({
+      where: { id: Number(req.params.id) },
+      data: { label, icon, value: Number(value), suffix, is_active }
+    });
+    res.json({ message: 'Impact stat updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.delete('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
+  try {
+    await prisma.impactStat.delete({ where: { id: Number(req.params.id) } });
+    res.json({ message: 'Impact stat deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // File upload route
-router.post('/admin/upload', authenticateToken, upload.single('file'), async (req, res) => {
+router.post('/api/admin/upload', authenticateToken, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
