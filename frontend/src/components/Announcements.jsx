@@ -94,9 +94,7 @@ export function Announcements() {
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
         >
           {announcements.map((announcement) => {
-            const imageUrl = announcement.image_url?.startsWith('/')
-              ? `${getApiUrl()}${announcement.image_url}`
-              : announcement.image_url
+            const imageUrl = announcement.image_url
 
             return (
             <motion.div

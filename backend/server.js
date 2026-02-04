@@ -8,6 +8,7 @@ const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
+const router = express.Router();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 
@@ -44,7 +45,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Admin login
-app.post('/api/admin/login', async (req, res) => {
+router.post('/admin/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     const admin = await prisma.admin.findUnique({ where: { username } });
@@ -59,7 +60,7 @@ app.post('/api/admin/login', async (req, res) => {
 });
 
 // Public routes
-app.get('/api/programs', async (req, res) => {
+router.get('/programs', async (req, res) => {
   try {
     const programs = await prisma.program.findMany({ where: { is_active: true } });
     res.json(programs);
@@ -68,7 +69,7 @@ app.get('/api/programs', async (req, res) => {
   }
 });
 
-app.get('/api/testimonials', async (req, res) => {
+router.get('/testimonials', async (req, res) => {
   try {
     const testimonials = await prisma.testimonial.findMany({ where: { is_active: true } });
     res.json(testimonials);
@@ -77,7 +78,7 @@ app.get('/api/testimonials', async (req, res) => {
   }
 });
 
-app.get('/api/posts', async (req, res) => {
+router.get('/posts', async (req, res) => {
   try {
     const posts = await prisma.post.findMany({ where: { published: true }, orderBy: { created_at: 'desc' } });
     res.json(posts);
@@ -86,7 +87,7 @@ app.get('/api/posts', async (req, res) => {
   }
 });
 
-app.post('/api/contact', async (req, res) => {
+router.post('/contact', async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
     if (!name || !email || !subject || !message) {
@@ -100,7 +101,7 @@ app.post('/api/contact', async (req, res) => {
 });
 
 // Admin dashboard
-app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
+router.get('/admin/dashboard', authenticateToken, async (req, res) => {
   try {
     const stats = {
       total_messages: await prisma.contactMessage.count(),
@@ -119,7 +120,7 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
 });
 
 // Admin messages
-app.get('/api/admin/messages', authenticateToken, async (req, res) => {
+router.get('/admin/messages', authenticateToken, async (req, res) => {
   try {
     const messages = await prisma.contactMessage.findMany({ orderBy: { created_at: 'desc' } });
     res.json(messages);
@@ -128,7 +129,7 @@ app.get('/api/admin/messages', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/messages/:id', authenticateToken, async (req, res) => {
+router.delete('/admin/messages/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.contactMessage.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Message deleted successfully' });
@@ -138,7 +139,7 @@ app.delete('/api/admin/messages/:id', authenticateToken, async (req, res) => {
 });
 
 // Additional routes that frontend might expect
-app.get('/api/leaders', async (req, res) => {
+router.get('/leaders', async (req, res) => {
   try {
     const leaders = await prisma.leader.findMany({ where: { is_active: true }, orderBy: { order_position: 'asc' } });
     res.json(leaders);
@@ -147,7 +148,7 @@ app.get('/api/leaders', async (req, res) => {
   }
 });
 
-app.get('/api/events', async (req, res) => {
+router.get('/events', async (req, res) => {
   try {
     const events = await prisma.event.findMany({ orderBy: { event_date: 'desc' } });
     res.json(events);
@@ -156,7 +157,7 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
-app.get('/api/gallery', async (req, res) => {
+router.get('/gallery', async (req, res) => {
   try {
     const gallery = await prisma.gallery.findMany({ where: { is_active: true }, orderBy: { created_at: 'desc' } });
     res.json(gallery);
@@ -165,7 +166,7 @@ app.get('/api/gallery', async (req, res) => {
   }
 });
 
-app.get('/api/impact-stats', async (req, res) => {
+router.get('/impact-stats', async (req, res) => {
   try {
     const stats = await prisma.impactStat.findMany({ where: { is_active: true }, orderBy: { id: 'asc' } });
     res.json(stats);
@@ -175,7 +176,7 @@ app.get('/api/impact-stats', async (req, res) => {
 });
 
 // Admin routes
-app.get('/api/admin/leaders', authenticateToken, async (req, res) => {
+router.get('/admin/leaders', authenticateToken, async (req, res) => {
   try {
     const leaders = await prisma.leader.findMany({ orderBy: { order_position: 'asc' } });
     res.json(leaders);
@@ -184,7 +185,7 @@ app.get('/api/admin/leaders', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
+router.post('/admin/leaders', authenticateToken, async (req, res) => {
   try {
     const { name, position, bio, image_url, order_position } = req.body;
     const leader = await prisma.leader.create({
@@ -196,7 +197,7 @@ app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
+router.put('/admin/leaders/:id', authenticateToken, async (req, res) => {
   try {
     const { name, position, bio, image_url, order_position } = req.body;
     await prisma.leader.update({
@@ -209,7 +210,7 @@ app.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
+router.delete('/admin/leaders/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.leader.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Leader deleted successfully' });
@@ -218,7 +219,7 @@ app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/admin/programs', authenticateToken, async (req, res) => {
+router.get('/admin/programs', authenticateToken, async (req, res) => {
   try {
     const programs = await prisma.program.findMany({ orderBy: { id: 'asc' } });
     res.json(programs);
@@ -227,7 +228,7 @@ app.get('/api/admin/programs', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/admin/programs', authenticateToken, async (req, res) => {
+router.post('/admin/programs', authenticateToken, async (req, res) => {
   try {
     const { title, description, icon } = req.body;
     const program = await prisma.program.create({
@@ -239,7 +240,7 @@ app.post('/api/admin/programs', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
+router.put('/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
     const { title, description, icon } = req.body;
     await prisma.program.update({
@@ -252,7 +253,7 @@ app.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
+router.delete('/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.program.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Program deleted successfully' });
@@ -261,7 +262,7 @@ app.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/admin/posts', authenticateToken, async (req, res) => {
+router.get('/admin/posts', authenticateToken, async (req, res) => {
   try {
     const posts = await prisma.post.findMany({ orderBy: { created_at: 'desc' } });
     res.json(posts);
@@ -270,7 +271,7 @@ app.get('/api/admin/posts', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/admin/posts', authenticateToken, async (req, res) => {
+router.post('/admin/posts', authenticateToken, async (req, res) => {
   try {
     const { title, content, excerpt, image_url, published } = req.body;
     const post = await prisma.post.create({
@@ -282,7 +283,7 @@ app.post('/api/admin/posts', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/api/admin/posts/:id', authenticateToken, async (req, res) => {
+router.put('/admin/posts/:id', authenticateToken, async (req, res) => {
   try {
     const { title, content, excerpt, image_url, published } = req.body;
     await prisma.post.update({
@@ -295,7 +296,7 @@ app.put('/api/admin/posts/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
+router.delete('/admin/posts/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.post.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Post deleted successfully' });
@@ -305,7 +306,7 @@ app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
 });
 
 // File upload route
-app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (req, res) => {
+router.post('/admin/upload', authenticateToken, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
@@ -317,87 +318,15 @@ app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (r
   });
 });
 
-// Fix image URLs - convert local paths to Cloudinary URLs
-app.post('/api/admin/fix-images', authenticateToken, async (req, res) => {
-  try {
-    const cloudinaryBase = 'https://res.cloudinary.com/dqdyjocsq/image/upload/';
-    
-    // Get all gallery items with local URLs
-    const localImages = await prisma.gallery.findMany({
-      where: {
-        image_url: {
-          startsWith: '/uploads/'
-        }
-      }
-    });
-    
-    let updated = 0;
-    
-    // Update each image individually
-    for (const image of localImages) {
-      const filename = image.image_url.replace('/uploads/', '');
-      const cloudinaryUrl = `${cloudinaryBase}${filename}`;
-      
-      await prisma.gallery.update({
-        where: { id: image.id },
-        data: { image_url: cloudinaryUrl }
-      });
-      updated++;
-    }
-    
-    res.json({ 
-      message: 'Image URLs updated to use Cloudinary',
-      updated,
-      cloudinaryBase
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
 
-// Public route to fix images (no auth needed for testing)
-app.get('/api/fix-images-now', async (req, res) => {
-  try {
-    const cloudinaryBase = 'https://res.cloudinary.com/dqdyjocsq/image/upload/';
-    
-    const localImages = await prisma.gallery.findMany({
-      where: {
-        image_url: {
-          startsWith: '/uploads/'
-        }
-      }
-    });
-    
-    let updated = 0;
-    
-    for (const image of localImages) {
-      const filename = image.image_url.replace('/uploads/', '');
-      const cloudinaryUrl = `${cloudinaryBase}${filename}`;
-      
-      await prisma.gallery.update({
-        where: { id: image.id },
-        data: { image_url: cloudinaryUrl }
-      });
-      updated++;
-    }
-    
-    res.json({ 
-      message: 'All image URLs fixed!',
-      updated,
-      cloudinaryBase
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
 
 // Health check
-app.get('/api/health', (req, res) => {
+router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
 // Database connection check
-app.get('/api/db-check', async (req, res) => {
+router.get('/db-check', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     const adminCount = await prisma.admin.count();
@@ -423,7 +352,7 @@ app.get('/api/db-check', async (req, res) => {
 });
 
 // Root route
-app.get('/', (req, res) => {
+router.get('/', (req, res) => {
   res.json({ 
     message: 'BUCCUSA API Server', 
     status: 'running',
@@ -433,17 +362,21 @@ app.get('/', (req, res) => {
 });
 
 // Favicon handler
-app.get('/favicon.ico', (req, res) => {
+router.get('/favicon.ico', (req, res) => {
   res.status(204).end();
 });
 
 // Handle missing uploads (Vercel doesn't support local file storage)
-app.get('/uploads/*', (req, res) => {
+router.get('/uploads/*', (req, res) => {
   res.status(404).json({ 
     message: 'File not found - Local uploads not supported on Vercel', 
     suggestion: 'Use Cloudinary for image storage' 
   });
 });
+
+// Mount the router to handle both /api/* and /* requests
+app.use('/api', router);
+app.use('/', router);
 
 // Error handling
 app.use((err, req, res, next) => {

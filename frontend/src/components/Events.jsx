@@ -96,9 +96,7 @@ export function Events() {
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
         >
           {events.map((event) => {
-            const imageUrl = event.image_url?.startsWith('/')
-              ? `${getApiUrl()}${event.image_url}`
-              : event.image_url
+            const imageUrl = event.image_url
 
             return (
             <motion.div

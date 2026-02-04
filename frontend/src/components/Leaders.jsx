@@ -133,10 +133,6 @@ export function Leaders() {
             >
               {slides[currentSlide].map((leader) => {
                 const imageUrl = leader.photo_url
-                  ? leader.photo_url.startsWith('http')
-                    ? leader.photo_url
-                    : `${getApiUrl()}/${leader.photo_url.replace(/^\/+/, '')}`
-                  : null
 
                 return (
                   <motion.div
