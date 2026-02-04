@@ -350,7 +350,7 @@ app.get('/api/gallery', async (req, res) => {
   }
 });
 
-app.get('/events/:id', async (req, res) => {
+app.get('/api/events/:id', async (req, res) => {
   try {
     const event = await prisma.event.findUnique({ where: { id: Number(req.params.id) } });
     if (!event) {
@@ -363,17 +363,7 @@ app.get('/events/:id', async (req, res) => {
   }
 });
 
-app.get('/posts', async (req, res) => {
-  try {
-    const posts = await prisma.post.findMany({ where: { published: true }, orderBy: { published_at: 'desc' } });
-    res.json(posts);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-app.get('/posts/:id', async (req, res) => {
+app.get('/api/posts/:id', async (req, res) => {
   try {
     const post = await prisma.post.findUnique({ where: { id: Number(req.params.id), published: true } });
     if (!post) {
@@ -386,67 +376,8 @@ app.get('/posts/:id', async (req, res) => {
   }
 });
 
-app.get('/impact-stats', async (req, res) => {
-  try {
-    const stats = await prisma.impactStat.findMany({
-      where: { is_active: true },
-      orderBy: { id: 'asc' }
-    });
-    // Map to expected frontend format
-    const formattedStats = stats.map(s => ({
-      id: s.id,
-      number: s.value,
-      label: s.label,
-      icon: s.icon,
-      suffix: s.suffix
-    }));
-    res.json(formattedStats);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-app.get('/testimonials', async (req, res) => {
-  try {
-    const testimonials = await prisma.testimonial.findMany({
-      select: {
-        id: true,
-        name: true,
-        position: true,
-        message: true,
-        photo_url: true,
-        is_active: true
-      },
-      where: { is_active: true }
-    });
-    // Map to expected frontend format
-    const formattedTestimonials = testimonials.map(t => ({
-      id: t.id,
-      name: t.name,
-      role: t.position,
-      content: t.message,
-      image: t.photo_url
-    }));
-    res.json(formattedTestimonials);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-app.get('/gallery', async (req, res) => {
-  try {
-    const gallery = await prisma.gallery.findMany({ orderBy: { created_at: 'desc' } });
-    res.json(gallery);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
 // Contact form
-app.post('/contact', async (req, res) => {
+app.post('/api/contact', async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
 
@@ -496,7 +427,7 @@ app.post('/contact', async (req, res) => {
 });
 
 // Partnership form
-app.post('/partnership', async (req, res) => {
+app.post('/api/partnership', async (req, res) => {
   try {
     const { organizationName, contactPerson, email, phone, partnershipType, message } = req.body;
 
