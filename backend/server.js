@@ -363,165 +363,94 @@ app.get('/api/events/:id', async (req, res) => {
   }
 });
 
-app.get('/api/posts/:id', async (req, res) => {
+app.getconst express = require('express');
+const cors = require('cors');
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const app = express();
+const prisma = new PrismaClient();
+const PORT = process.env.PORT || 5000;
+
+app.use(cors());
+app.use(express.json());
+
+// Auth middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+  jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret', (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
+// Admin login
+app.post('/api/admin/login', async (req, res) => {
   try {
-    const post = await prisma.post.findUnique({ where: { id: Number(req.params.id), published: true } });
-    if (!post) {
-      return res.status(404).json({ message: 'Post not found' });
+    const { username, password } = req.body;
+    const admin = await prisma.admin.findUnique({ where: { username } });
+    if (!admin || !await bcrypt.compare(password, admin.password_hash)) {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
-    res.json(post);
+    const token = jwt.sign({ id: admin.id, username: admin.username }, process.env.JWT_SECRET || 'fallback-secret');
+    res.json({ token, admin: { id: admin.id, username: admin.username, email: admin.email } });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Contact form
+// Public routes
+app.get('/api/programs', async (req, res) => {
+  try {
+    const programs = await prisma.program.findMany({ where: { is_active: true } });
+    res.json(programs);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/testimonials', async (req, res) => {
+  try {
+    const testimonials = await prisma.testimonial.findMany({ where: { is_active: true } });
+    res.json(testimonials);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/posts', async (req, res) => {
+  try {
+    const posts = await prisma.post.findMany({ where: { published: true }, orderBy: { created_at: 'desc' } });
+    res.json(posts);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 app.post('/api/contact', async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
-
-    // Validate required fields
     if (!name || !email || !subject || !message) {
       return res.status(400).json({ message: 'All fields are required' });
     }
-
-    // Insert into database
-    try {
-      await prisma.contactMessage.create({
-        data: { name, email, subject, message }
-      });
-    } catch (dbError) {
-      console.error('Database error:', dbError);
-      return res.status(500).json({ message: 'Database error', error: dbError.message });
-    }
-
-    // Send email notification (optional)
-    if (transporter) {
-      try {
-        const mailOptions = {
-          from: process.env.EMAIL_USER,
-          to: process.env.ADMIN_EMAIL || 'bungomastudent@gmail.com',
-          subject: 'New Contact Message - BUCCUSA',
-          html: `
-            <h3>New Contact Message</h3>
-            <p><strong>Name:</strong> ${name}</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Subject:</strong> ${subject}</p>
-            <p><strong>Message:</strong></p>
-            <p>${message}</p>
-          `
-        };
-        await transporter.sendMail(mailOptions);
-      } catch (emailError) {
-        console.error('Email error:', emailError);
-        // Don't fail the request if email fails
-      }
-    }
-
+    await prisma.contactMessage.create({ data: { name, email, subject, message } });
     res.json({ message: 'Message sent successfully' });
   } catch (error) {
-    console.error('Contact form error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-// Partnership form
-app.post('/api/partnership', async (req, res) => {
-  try {
-    const { organizationName, contactPerson, email, phone, partnershipType, message } = req.body;
-
-    await prisma.partnershipRequest.create({
-      data: {
-        organization_name: organizationName,
-        contact_person: contactPerson,
-        email,
-        phone,
-        partnership_type: partnershipType,
-        message
-      }
-    });
-
-    // Send email notification
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: process.env.ADMIN_EMAIL || 'bungomastudent@gmail.com',
-      subject: 'New Partnership Request - BUCCUSA',
-      html: `
-        <h3>New Partnership Request</h3>
-        <p><strong>Organization:</strong> ${organizationName}</p>
-        <p><strong>Contact Person:</strong> ${contactPerson}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Phone:</strong> ${phone}</p>
-        <p><strong>Type:</strong> ${partnershipType}</p>
-        <p><strong>Message:</strong></p>
-        <p>${message}</p>
-      `
-    };
-
-    if (transporter) {
-      await transporter.sendMail(mailOptions);
-    }
-
-    res.json({ message: 'Partnership request submitted successfully' });
-  } catch (error) {
-    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Volunteer form
-app.post('/api/volunteer', async (req, res) => {
-  try {
-    const { name, email, phone, interests, experience } = req.body;
-
-    await prisma.volunteerSubmission.create({
-      data: { name, email, phone, interests, experience }
-    });
-
-    // Send email notification
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: process.env.ADMIN_EMAIL || 'bungomastudent@gmail.com',
-      subject: 'New Volunteer Application - BUCCUSA',
-      html: `
-        <h3>New Volunteer Application</h3>
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Phone:</strong> ${phone}</p>
-        <p><strong>Interests:</strong> ${interests}</p>
-        <p><strong>Experience:</strong></p>
-        <p>${experience}</p>
-      `
-    };
-
-    if (transporter) {
-      await transporter.sendMail(mailOptions);
-    }
-
-    res.json({ message: 'Volunteer application submitted successfully' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Admin routes (protected)
+// Admin dashboard
 app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
   try {
-    // Get comprehensive stats
     const stats = {
-      unread_messages: await prisma.contactMessage.count({ where: { is_read: false } }),
       total_messages: await prisma.contactMessage.count(),
-      published_posts: await prisma.post.count({ where: { published: true } }),
       total_posts: await prisma.post.count(),
-      total_events: await prisma.event.count(),
-      active_programs: await prisma.program.count({ where: { is_active: true } }),
-      total_programs: await prisma.program.count(),
-      total_testimonials: await prisma.testimonial.count(),
-      total_stats: await prisma.impactStat.count(),
-      active_leaders: await prisma.leader.count({ where: { is_active: true } }),
-      active_members: await prisma.member.count({ where: { is_active: true } })
+      total_programs: await prisma.program.count()
     };
     const recentContacts = await prisma.contactMessage.findMany({
       select: { id: true, name: true, email: true, subject: true, created_at: true },
@@ -530,106 +459,46 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
     });
     res.json({ stats, recentContacts });
   } catch (error) {
-    console.error('Dashboard error:', error);
-    if (error.code === 'P6002') {
-      return res.status(503).json({ message: 'Database connection failed - Invalid API key' });
-    }
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-// Create new Admin
-app.post('/api/admin/create-admin', authenticateToken, async (req, res) => {
-  try {
-    const { username, email, password } = req.body;
-
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: 'Username, email, and password are required' });
-    }
-
-    const existingAdmin = await prisma.admin.findFirst({
-      where: {
-        OR: [{ username }, { email }]
-      }
-    });
-
-    if (existingAdmin) {
-      return res.status(400).json({ message: 'Admin with this username or email already exists' });
-    }
-
-    const password_hash = await bcrypt.hash(password, 10);
-
-    await prisma.admin.create({
-      data: { username, email, password_hash }
-    });
-
-    res.json({ message: 'New admin created successfully' });
-  } catch (error) {
-    console.error('Error creating admin:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// CRUD operations for admin
-app.get('/api/admin/programs', authenticateToken, async (req, res) => {
+// Admin messages
+app.get('/api/admin/messages', authenticateToken, async (req, res) => {
   try {
-    const programs = await prisma.program.findMany({ orderBy: { id: 'asc' } });
-    res.json(programs);
+    const messages = await prisma.contactMessage.findMany({ orderBy: { created_at: 'desc' } });
+    res.json(messages);
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-app.post('/api/admin/programs', authenticateToken, async (req, res) => {
+app.delete('/api/admin/messages/:id', authenticateToken, async (req, res) => {
   try {
-    const { title, description, icon } = req.body;
-    const program = await prisma.program.create({
-      data: { title, description: description ?? null, icon: icon ?? null, is_active: true }
-    });
-    res.json({ id: program.id, message: 'Program created successfully' });
+    await prisma.contactMessage.delete({ where: { id: Number(req.params.id) } });
+    res.json({ message: 'Message deleted successfully' });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-app.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
-  try {
-    const { title, description, icon, is_active } = req.body;
-    await prisma.program.update({
-      where: { id: Number(req.params.id) },
-      data: { title, description: description ?? null, icon: icon ?? null, is_active: is_active ?? undefined }
-    });
-    res.json({ message: 'Program updated successfully' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
+// Error handling
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Something went wrong!' });
 });
 
-app.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
-  try {
-    await prisma.program.delete({ where: { id: Number(req.params.id) } });
-    res.json({ message: 'Program deleted successfully' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
+app.use('*', (req, res) => {
+  res.status(404).json({ message: 'Route not found' });
 });
 
-// CRUD for Leaders (Officials)
-app.get('/api/admin/leaders', authenticateToken, async (req, res) => {
-  try {
-    const leaders = await prisma.leader.findMany({ orderBy: { order_position: 'asc' } });
-    res.json(leaders);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+  });
+}
 
-app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
+module.exports = app;s) => {
   try {
     const { name, title, bio, photo_url } = req.body;
     
