@@ -10,6 +10,8 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 require('dotenv').config();
 
@@ -30,7 +32,7 @@ app.use(helmet({
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
       "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "blob:"],
-      "img-src": ["'self'", "data:", "https:", "blob:"],
+      "img-src": ["'self'", "data:", "https:", "blob:", "res.cloudinary.com"],
     },
   },
 }));
@@ -53,18 +55,32 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // File upload configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dqdyjocsq',
+  api_key: process.env.CLOUDINARY_API_KEY || '927174813129114',
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
+
+const storage = process.env.CLOUDINARY_API_SECRET
+  ? new CloudinaryStorage({
+      cloudinary: cloudinary,
+      params: {
+        folder: 'bungoma-uploads',
+        allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
+      },
+    })
+  : multer.diskStorage({
+      destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, 'uploads');
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+      },
+      filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+      }
+    });
 
 const upload = multer({
   storage,
@@ -936,7 +952,12 @@ app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (r
     return res.status(400).json({ message: 'No file uploaded' });
   }
 
-  const imageUrl = `/uploads/${req.file.filename}`;
+  let imageUrl;
+  if (req.file.path && req.file.path.startsWith('http')) {
+    imageUrl = req.file.path; // Cloudinary URL
+  } else {
+    imageUrl = `/uploads/${req.file.filename}`; // Local URL
+  }
 
   try {
     await prisma.gallery.create({
