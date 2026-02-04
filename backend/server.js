@@ -144,7 +144,7 @@ const authenticateToken = (req, res, next) => {
 // Routes
 
 // Health check endpoint
-app.get('/health', async (req, res) => {
+app.get('/api/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ 
@@ -164,7 +164,7 @@ app.get('/health', async (req, res) => {
 });
 
 // Debug endpoint
-app.get('/debug', (req, res) => {
+app.get('/api/debug', (req, res) => {
   res.json({
     env: {
       has_database_url: !!process.env.DATABASE_URL,
@@ -177,7 +177,7 @@ app.get('/debug', (req, res) => {
 });
 
 // Admin authentication
-app.post('/admin/login', async (req, res) => {
+app.post('/api/admin/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     const admin = await prisma.admin.findUnique({ where: { username } });
@@ -203,7 +203,7 @@ app.post('/admin/login', async (req, res) => {
 });
 
 // Forgot Password
-app.post('/admin/forgot-password', async (req, res) => {
+app.post('/api/admin/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
     const admin = await prisma.admin.findFirst({ where: { email } });
@@ -237,7 +237,7 @@ app.post('/admin/forgot-password', async (req, res) => {
 });
 
 // Reset Password
-app.post('/admin/reset-password', async (req, res) => {
+app.post('/api/admin/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
     
@@ -266,7 +266,7 @@ app.post('/admin/reset-password', async (req, res) => {
 });
 
 // Public routes
-app.get('/programs', async (req, res) => {
+app.get('/api/programs', async (req, res) => {
   try {
     const programs = await prisma.program.findMany({ orderBy: { id: 'asc' } });
     res.json(programs);
@@ -276,7 +276,7 @@ app.get('/programs', async (req, res) => {
   }
 });
 
-app.get('/leaders', async (req, res) => {
+app.get('/api/leaders', async (req, res) => {
   try {
     const leaders = await prisma.leader.findMany({ orderBy: { order_position: 'asc' } });
     res.json(leaders);
@@ -286,7 +286,7 @@ app.get('/leaders', async (req, res) => {
   }
 });
 
-app.get('/events', async (req, res) => {
+app.get('/api/events', async (req, res) => {
   try {
     const events = await prisma.event.findMany({ orderBy: { event_date: 'desc' } });
     res.json(events);
