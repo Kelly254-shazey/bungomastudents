@@ -18,6 +18,10 @@ const prisma = new PrismaClient({
 });
 
 // Basic routes
+app.get('/', (req, res) => {
+  res.json({ message: 'BUCCUSA API is running', status: 'OK' });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
