@@ -827,26 +827,27 @@ app.delete('/api/admin/impact-stats/:id', authenticateToken, async (req, res) =>
     res.status(500).json({ message: 'Server error' });
   }
 });
-app.post('/api/admin/upload', authenticateToken, upload.single('file'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ message: 'No file uploaded' });
-  }
-  res.json({
-    message: 'File uploaded successfully',
-    filename: req.file.filename,
-    url: `/uploads/${req.file.filename}`
-  });
-});
 
 // File upload route
-app.post('/api/admin/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
+
+  const imageUrl = `/uploads/${req.file.filename}`;
+
+  try {
+    await prisma.gallery.create({
+      data: { image_url: imageUrl, caption: req.body.caption || req.file.originalname }
+    });
+  } catch (error) {
+    console.error('Error saving to gallery:', error);
+  }
+
   res.json({
     message: 'File uploaded successfully',
     filename: req.file.filename,
-    url: `/uploads/${req.file.filename}`
+    url: imageUrl
   });
 });
 

@@ -7,8 +7,10 @@ async function main() {
 
   // Seed Admins
   console.log('📝 Seeding admins...');
-  const admin = await prisma.admin.create({
-    data: {
+  const admin = await prisma.admin.upsert({
+    where: { username: 'buccusa' },
+    update: {},
+    create: {
       username: 'buccusa',
       password_hash: '$2b$10$0OK.NRHa8CH6P//S9vGmGe.mETWC7.PcyOzFRvEsDjgfMTtAY0esK',
       email: 'admin@buccusa.org',
@@ -202,6 +204,23 @@ async function main() {
       updated_at: new Date('2026-01-15T18:21:53.000Z')
     }
   });
+
+  // Seed Members
+  console.log('👥 Seeding members...');
+  const membersData = [
+    { name: 'Grace Mwakio', email: 'grace@buccusa.org', phone: '+254712345678', position: 'Member', department: 'Welfare', photo_url: null, bio: 'Committed to student welfare.', is_active: true, created_at: new Date('2026-01-15T18:21:53.000Z') },
+    { name: 'Samuel Kamau', email: 'samuel@buccusa.org', phone: '+254723456789', position: 'Coordinator', department: 'Sports', photo_url: null, bio: 'Sports enthusiast and organizer.', is_active: true, created_at: new Date('2026-01-16T10:00:00.000Z') }
+  ];
+
+  for (const member of membersData) {
+    if (prisma.member) {
+      await prisma.member.upsert({
+        where: { email: member.email },
+        update: {},
+        create: member
+      });
+    }
+  }
 
   console.log('✅ Database seeding completed successfully!');
 }
