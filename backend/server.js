@@ -302,23 +302,33 @@ app.post('/api/admin/fix-images', authenticateToken, async (req, res) => {
   try {
     const cloudinaryBase = 'https://res.cloudinary.com/dqdyjocsq/image/upload/';
     
-    // Update gallery images
-    const galleryUpdates = await prisma.gallery.updateMany({
+    // Get all gallery items with local URLs
+    const localImages = await prisma.gallery.findMany({
       where: {
         image_url: {
           startsWith: '/uploads/'
         }
-      },
-      data: {
-        image_url: {
-          // This would need to be done individually for each record
-        }
       }
     });
     
+    let updated = 0;
+    
+    // Update each image individually
+    for (const image of localImages) {
+      const filename = image.image_url.replace('/uploads/', '');
+      const cloudinaryUrl = `${cloudinaryBase}${filename}`;
+      
+      await prisma.gallery.update({
+        where: { id: image.id },
+        data: { image_url: cloudinaryUrl }
+      });
+      updated++;
+    }
+    
     res.json({ 
       message: 'Image URLs updated to use Cloudinary',
-      updated: galleryUpdates.count 
+      updated,
+      cloudinaryBase
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
