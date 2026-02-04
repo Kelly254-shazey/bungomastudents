@@ -191,6 +191,14 @@ app.get('/favicon.ico', (req, res) => {
   res.status(204).end();
 });
 
+// Handle missing uploads (Vercel doesn't support local file storage)
+app.get('/uploads/*', (req, res) => {
+  res.status(404).json({ 
+    message: 'File not found - Local uploads not supported on Vercel', 
+    suggestion: 'Use Cloudinary for image storage' 
+  });
+});
+
 // Error handling
 app.use((err, req, res, next) => {
   console.error(err.stack);
