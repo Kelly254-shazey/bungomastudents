@@ -471,7 +471,7 @@ app.post('/api/partnership', async (req, res) => {
 });
 
 // Volunteer form
-app.post('/volunteer', async (req, res) => {
+app.post('/api/volunteer', async (req, res) => {
   try {
     const { name, email, phone, interests, experience } = req.body;
 
