@@ -506,57 +506,8 @@ app.post('/api/volunteer', async (req, res) => {
   }
 });
 
-// Admin dashboard
-app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
-  try {
-    const stats = {
-      unread_messages: await prisma.contactMessage.count({ where: { is_read: false } }),
-      total_messages: await prisma.contactMessage.count(),
-      published_posts: await prisma.post.count({ where: { published: true } }),
-      total_posts: await prisma.post.count(),
-      total_events: await prisma.event.count(),
-      active_programs: await prisma.program.count({ where: { is_active: true } }),
-      total_programs: await prisma.program.count(),
-      total_testimonials: await prisma.testimonial.count(),
-      total_stats: await prisma.impactStat.count(),
-      active_leaders: await prisma.leader.count({ where: { is_active: true } }),
-      active_members: await prisma.member.count({ where: { is_active: true } })
-    };
-    const recentContacts = await prisma.contactMessage.findMany({
-      select: { id: true, name: true, email: true, subject: true, created_at: true },
-      orderBy: { created_at: 'desc' },
-      take: 5
-    });
-    res.json({ stats, recentContacts });
-  } catch (error) {
-    console.error('Dashboard error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
-});
-
-module.exports = app;ce:</strong></p>
-        <p>${experience}</p>
-      `
-    };
-
-    if (transporter) {
-      await transporter.sendMail(mailOptions);
-    }
-
-    res.json({ message: 'Volunteer application submitted successfully' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
 // Admin routes (protected)
-app.get('/admin/dashboard', authenticateToken, async (req, res) => {
+app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
   try {
     // Get comprehensive stats
     const stats = {
@@ -588,7 +539,7 @@ app.get('/admin/dashboard', authenticateToken, async (req, res) => {
 });
 
 // Create new Admin
-app.post('/admin/create-admin', authenticateToken, async (req, res) => {
+app.post('/api/admin/create-admin', authenticateToken, async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
@@ -620,7 +571,7 @@ app.post('/admin/create-admin', authenticateToken, async (req, res) => {
 });
 
 // CRUD operations for admin
-app.get('/admin/programs', authenticateToken, async (req, res) => {
+app.get('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
     const programs = await prisma.program.findMany({ orderBy: { id: 'asc' } });
     res.json(programs);
@@ -630,7 +581,7 @@ app.get('/admin/programs', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/admin/programs', authenticateToken, async (req, res) => {
+app.post('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
     const { title, description, icon } = req.body;
     const program = await prisma.program.create({
@@ -643,7 +594,7 @@ app.post('/admin/programs', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/admin/programs/:id', authenticateToken, async (req, res) => {
+app.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
     const { title, description, icon, is_active } = req.body;
     await prisma.program.update({
@@ -657,7 +608,7 @@ app.put('/admin/programs/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/admin/programs/:id', authenticateToken, async (req, res) => {
+app.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.program.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Program deleted successfully' });
@@ -668,7 +619,7 @@ app.delete('/admin/programs/:id', authenticateToken, async (req, res) => {
 });
 
 // CRUD for Leaders (Officials)
-app.get('/admin/leaders', authenticateToken, async (req, res) => {
+app.get('/api/admin/leaders', authenticateToken, async (req, res) => {
   try {
     const leaders = await prisma.leader.findMany({ orderBy: { order_position: 'asc' } });
     res.json(leaders);
@@ -678,7 +629,7 @@ app.get('/admin/leaders', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/admin/leaders', authenticateToken, async (req, res) => {
+app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
   try {
     const { name, title, bio, photo_url } = req.body;
     
@@ -700,7 +651,7 @@ app.post('/admin/leaders', authenticateToken, async (req, res) => {
 });
 
 
-app.put('/admin/leaders/:id', authenticateToken, async (req, res) => {
+app.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
   try {
     const { name, title, bio, photo_url, order_position, is_active } = req.body;
     await prisma.leader.update({
@@ -722,7 +673,7 @@ app.put('/admin/leaders/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/admin/leaders/:id', authenticateToken, async (req, res) => {
+app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.leader.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Official deleted successfully' });
@@ -740,7 +691,7 @@ app.delete('/admin/leaders/:id', authenticateToken, async (req, res) => {
 
 
 // CRUD for Members
-app.get('/admin/members', authenticateToken, async (req, res) => {
+app.get('/api/admin/members', authenticateToken, async (req, res) => {
   try {
     const members = await prisma.member.findMany({ orderBy: { created_at: 'desc' } });
     res.json(members);
@@ -750,7 +701,7 @@ app.get('/admin/members', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/admin/members', authenticateToken, async (req, res) => {
+app.post('/api/admin/members', authenticateToken, async (req, res) => {
   try {
     const { name, email, phone, position, department, photo_url, bio } = req.body;
     const member = await prisma.member.create({
@@ -763,7 +714,7 @@ app.post('/admin/members', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/admin/members/:id', authenticateToken, async (req, res) => {
+app.put('/api/admin/members/:id', authenticateToken, async (req, res) => {
   try {
     const { name, email, phone, position, department, photo_url, bio, is_active } = req.body;
     await prisma.member.update({
@@ -777,7 +728,7 @@ app.put('/admin/members/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/admin/members/:id', authenticateToken, async (req, res) => {
+app.delete('/api/admin/members/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.member.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Member deleted successfully' });
@@ -788,7 +739,7 @@ app.delete('/admin/members/:id', authenticateToken, async (req, res) => {
 });
 
 // CRUD for Events
-app.get('/admin/events', authenticateToken, async (req, res) => {
+app.get('/api/admin/events', authenticateToken, async (req, res) => {
   try {
     const events = await prisma.event.findMany({ orderBy: { event_date: 'desc' } });
     res.json(events);
@@ -798,7 +749,7 @@ app.get('/admin/events', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/admin/events', authenticateToken, async (req, res) => {
+app.post('/api/admin/events', authenticateToken, async (req, res) => {
   try {
     const { title, description, event_date, location, image_url, is_upcoming } = req.body;
     const event = await prisma.event.create({
@@ -811,7 +762,7 @@ app.post('/admin/events', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/admin/events/:id', authenticateToken, async (req, res) => {
+app.put('/api/admin/events/:id', authenticateToken, async (req, res) => {
   try {
     const { title, description, event_date, location, image_url, is_upcoming } = req.body;
     await prisma.event.update({
@@ -825,7 +776,7 @@ app.put('/admin/events/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/admin/events/:id', authenticateToken, async (req, res) => {
+app.delete('/api/admin/events/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.event.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Event deleted successfully' });
@@ -836,7 +787,7 @@ app.delete('/admin/events/:id', authenticateToken, async (req, res) => {
 });
 
 // Contact Messages Management
-app.get('/admin/messages', authenticateToken, async (req, res) => {
+app.get('/api/admin/messages', authenticateToken, async (req, res) => {
   try {
     const messages = await prisma.contactMessage.findMany({ orderBy: { created_at: 'desc' } });
     res.json(messages);
@@ -846,7 +797,7 @@ app.get('/admin/messages', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/admin/messages/:id/reply', authenticateToken, async (req, res) => {
+app.post('/api/admin/messages/:id/reply', authenticateToken, async (req, res) => {
   try {
     const { reply_text } = req.body;
     const messageId = req.params.id;
@@ -893,7 +844,7 @@ app.post('/admin/messages/:id/reply', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/admin/messages/:id/read', authenticateToken, async (req, res) => {
+app.put('/api/admin/messages/:id/read', authenticateToken, async (req, res) => {
   try {
     await prisma.contactMessage.update({ where: { id: Number(req.params.id) }, data: { is_read: true } });
     res.json({ message: 'Message marked as read' });
@@ -903,7 +854,7 @@ app.put('/admin/messages/:id/read', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/admin/messages/:id', authenticateToken, async (req, res) => {
+app.delete('/api/admin/messages/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.contactMessage.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Message deleted successfully' });
@@ -914,7 +865,7 @@ app.delete('/admin/messages/:id', authenticateToken, async (req, res) => {
 });
 
 // CRUD for Posts (Announcements)
-app.get('/admin/posts', authenticateToken, async (req, res) => {
+app.get('/api/admin/posts', authenticateToken, async (req, res) => {
   try {
     const posts = await prisma.post.findMany({ orderBy: { created_at: 'desc' } });
     res.json(posts);
@@ -924,7 +875,7 @@ app.get('/admin/posts', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/admin/posts', authenticateToken, async (req, res) => {
+app.post('/api/admin/posts', authenticateToken, async (req, res) => {
   try {
     const { title, content, excerpt, image_url, published } = req.body;
     const published_at = published ? new Date() : null;
@@ -938,7 +889,7 @@ app.post('/admin/posts', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/admin/posts/:id', authenticateToken, async (req, res) => {
+app.put('/api/admin/posts/:id', authenticateToken, async (req, res) => {
   try {
     const { title, content, excerpt, image_url, published } = req.body;
     const published_at = published ? new Date() : null;
@@ -953,7 +904,7 @@ app.put('/admin/posts/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/admin/posts/:id', authenticateToken, async (req, res) => {
+app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.post.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Post deleted successfully' });
@@ -964,7 +915,7 @@ app.delete('/admin/posts/:id', authenticateToken, async (req, res) => {
 });
 
 // CRUD for Testimonials
-app.get('/admin/testimonials', authenticateToken, async (req, res) => {
+app.get('/api/admin/testimonials', authenticateToken, async (req, res) => {
   try {
     const testimonials = await prisma.testimonial.findMany({ 
       orderBy: { created_at: 'desc' }
@@ -986,7 +937,7 @@ app.get('/admin/testimonials', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/admin/testimonials', authenticateToken, async (req, res) => {
+app.post('/api/admin/testimonials', authenticateToken, async (req, res) => {
   try {
     const { name, role, content, image } = req.body;
     const testimonial = await prisma.testimonial.create({
@@ -999,7 +950,7 @@ app.post('/admin/testimonials', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/admin/testimonials/:id', authenticateToken, async (req, res) => {
+app.put('/api/admin/testimonials/:id', authenticateToken, async (req, res) => {
   try {
     const { name, role, content, image } = req.body;
     await prisma.testimonial.update({
@@ -1013,7 +964,7 @@ app.put('/admin/testimonials/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/admin/testimonials/:id', authenticateToken, async (req, res) => {
+app.delete('/api/admin/testimonials/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.testimonial.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Testimonial deleted successfully' });
@@ -1024,7 +975,7 @@ app.delete('/admin/testimonials/:id', authenticateToken, async (req, res) => {
 });
 
 // CRUD for Impact Stats
-app.get('/admin/impact-stats', authenticateToken, async (req, res) => {
+app.get('/api/admin/impact-stats', authenticateToken, async (req, res) => {
   try {
     const stats = await prisma.impactStat.findMany({ orderBy: { id: 'asc' } });
     // Map to expected admin format
@@ -1044,7 +995,7 @@ app.get('/admin/impact-stats', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/admin/impact-stats', authenticateToken, async (req, res) => {
+app.post('/api/admin/impact-stats', authenticateToken, async (req, res) => {
   try {
     const { number, label, icon } = req.body;
     const stat = await prisma.impactStat.create({
@@ -1057,7 +1008,7 @@ app.post('/admin/impact-stats', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/admin/impact-stats/:id', authenticateToken, async (req, res) => {
+app.put('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
   try {
     const { number, label, icon } = req.body;
     await prisma.impactStat.update({
@@ -1071,7 +1022,7 @@ app.put('/admin/impact-stats/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/admin/impact-stats/:id', authenticateToken, async (req, res) => {
+app.delete('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
   try {
     await prisma.impactStat.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Stat deleted successfully' });
@@ -1082,7 +1033,7 @@ app.delete('/admin/impact-stats/:id', authenticateToken, async (req, res) => {
 });
 
 // File upload route
-app.post('/admin/upload', authenticateToken, upload.single('file'), async (req, res) => {
+app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
@@ -1115,9 +1066,6 @@ app.post('/admin/upload', authenticateToken, upload.single('file'), async (req, 
   }
 });
 
-// Remove static file serving - not supported on Vercel
-// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -1128,6 +1076,7 @@ app.use((err, req, res, next) => {
 app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
+
 
 // Start server (only in development)
 if (process.env.NODE_ENV !== 'production') {
