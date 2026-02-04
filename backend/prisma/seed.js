@@ -158,7 +158,7 @@ async function main() {
         await prisma.gallery.create({
           data: {
             image_url: leader.photo_url,
-            caption: `${leader.name} - ${leader.title}`,
+            title: `${leader.name} - ${leader.title}`,
             created_at: new Date(leader.created_at)
           }
         });
@@ -175,7 +175,7 @@ async function main() {
         await prisma.gallery.create({
           data: {
             image_url: member.photo_url,
-            caption: `${member.name} - ${member.position || 'Member'}`,
+            title: `${member.name} - ${member.position || 'Member'}`,
             created_at: new Date(member.created_at)
           }
         });
@@ -192,7 +192,7 @@ async function main() {
         await prisma.gallery.create({
           data: {
             image_url: event.image_url,
-            caption: `Event: ${event.title}`,
+            title: `Event: ${event.title}`,
             created_at: new Date(event.created_at)
           }
         });
@@ -209,7 +209,7 @@ async function main() {
         await prisma.gallery.create({
           data: {
             image_url: post.image_url,
-            caption: `Post: ${post.title}`,
+            title: `Post: ${post.title}`,
             created_at: new Date(post.created_at)
           }
         });

@@ -20,10 +20,25 @@ const PORT = process.env.PORT || 5001;
 
 app.set('trust proxy', 1); // Trust first proxy
 
-// Prisma Client initialization with Accelerate support
+// Prisma Client initialization with better error handling
 const prisma = new PrismaClient({
   log: ['error', 'warn'],
+  datasources: {
+    db: {
+      url: process.env.PRISMA_DATABASE_URL || process.env.DATABASE_URL
+    }
+  }
 });
+
+// Test database connection on startup
+prisma.$connect()
+  .then(() => console.log('✅ Database connected successfully'))
+  .catch((error) => {
+    console.error('❌ Database connection failed:', error.message);
+    if (error.code === 'P6002') {
+      console.error('   Invalid API Key for Prisma Accelerate. Please check your PRISMA_DATABASE_URL.');
+    }
+  });
 
 // Middleware
 app.use(helmet({
@@ -65,7 +80,7 @@ const storage = process.env.CLOUDINARY_API_SECRET
   ? new CloudinaryStorage({
       cloudinary: cloudinary,
       params: {
-        folder: 'uploads',
+        folder: 'bungoma-uploads',
         allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
       },
     })
@@ -128,6 +143,39 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Routes
+
+// Health check endpoint
+app.get('/api/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ 
+      status: 'OK', 
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(503).json({ 
+      status: 'ERROR', 
+      database: 'disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Debug endpoint
+app.get('/api/debug', (req, res) => {
+  res.json({
+    env: {
+      has_database_url: !!process.env.DATABASE_URL,
+      has_prisma_url: !!process.env.PRISMA_DATABASE_URL,
+      has_jwt_secret: !!process.env.JWT_SECRET,
+      node_env: process.env.NODE_ENV
+    },
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Admin authentication
 app.post('/api/admin/login', async (req, res) => {
@@ -287,8 +335,19 @@ app.get('/api/posts/:id', async (req, res) => {
 
 app.get('/api/impact-stats', async (req, res) => {
   try {
-    const stats = await prisma.impactStat.findMany();
-    res.json(stats);
+    const stats = await prisma.impactStat.findMany({
+      where: { is_active: true },
+      orderBy: { id: 'asc' }
+    });
+    // Map to expected frontend format
+    const formattedStats = stats.map(s => ({
+      id: s.id,
+      number: s.value,
+      label: s.label,
+      icon: s.icon,
+      suffix: s.suffix
+    }));
+    res.json(formattedStats);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -297,8 +356,26 @@ app.get('/api/impact-stats', async (req, res) => {
 
 app.get('/api/testimonials', async (req, res) => {
   try {
-    const testimonials = await prisma.testimonial.findMany();
-    res.json(testimonials);
+    const testimonials = await prisma.testimonial.findMany({
+      select: {
+        id: true,
+        name: true,
+        position: true,
+        message: true,
+        photo_url: true,
+        is_active: true
+      },
+      where: { is_active: true }
+    });
+    // Map to expected frontend format
+    const formattedTestimonials = testimonials.map(t => ({
+      id: t.id,
+      name: t.name,
+      role: t.position,
+      content: t.message,
+      image: t.photo_url
+    }));
+    res.json(formattedTestimonials);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -455,27 +532,24 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
       published_posts: await prisma.post.count({ where: { published: true } }),
       total_posts: await prisma.post.count(),
       total_events: await prisma.event.count(),
-      active_programs: await prisma.program.count({ where: { is_active: 1 } }),
+      active_programs: await prisma.program.count({ where: { is_active: true } }),
       total_programs: await prisma.program.count(),
       total_testimonials: await prisma.testimonial.count(),
       total_stats: await prisma.impactStat.count(),
-      active_leaders: await prisma.leader.count({ where: { is_active: 1 } }),
-      active_members: await prisma.member.count({ where: { is_active: 1 } })
+      active_leaders: await prisma.leader.count({ where: { is_active: true } }),
+      active_members: await prisma.member.count({ where: { is_active: true } })
     };
     const recentContacts = await prisma.contactMessage.findMany({
       select: { id: true, name: true, email: true, subject: true, created_at: true },
       orderBy: { created_at: 'desc' },
       take: 5
     });
-    const sampleCounts = [
-      { table_name: 'programs', count: await prisma.program.count() },
-      { table_name: 'events', count: await prisma.event.count() },
-      { table_name: 'testimonials', count: await prisma.testimonial.count() },
-      { table_name: 'posts', count: await prisma.post.count() }
-    ];
-    res.json({ stats, recentContacts, debug: sampleCounts });
+    res.json({ stats, recentContacts });
   } catch (error) {
     console.error('Dashboard error:', error);
+    if (error.code === 'P6002') {
+      return res.status(503).json({ message: 'Database connection failed - Invalid API key' });
+    }
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -527,7 +601,7 @@ app.post('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
     const { title, description, icon } = req.body;
     const program = await prisma.program.create({
-      data: { title, description: description ?? null, icon: icon ?? null, is_active: 1 }
+      data: { title, description: description ?? null, icon: icon ?? null, is_active: true }
     });
     res.json({ id: program.id, message: 'Program created successfully' });
   } catch (error) {
@@ -579,7 +653,7 @@ app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
       const maxOrder = await prisma.leader.aggregate({ _max: { order_position: true } });
       const nextOrder = (maxOrder._max.order_position || 0) + 1;
       const leader = await prisma.leader.create({
-        data: { name, title, bio: bio ?? null, photo_url: photo_url ?? null, order_position: nextOrder, is_active: 1 }
+        data: { name, title, bio: bio ?? null, photo_url: photo_url ?? null, order_position: nextOrder, is_active: true }
       });
       res.json({ id: leader.id, message: 'Official added successfully' });
     } catch (dbError) {
@@ -620,8 +694,14 @@ app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
     await prisma.leader.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Official deleted successfully' });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error deleting official:', error);
+    if (error.code === 'P2025') {
+      return res.status(404).json({ message: 'Official not found' });
+    }
+    if (error.code === 'P2003') {
+      return res.status(400).json({ message: 'Cannot delete official because they are referenced by other records.' });
+    }
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -853,8 +933,20 @@ app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
 // CRUD for Testimonials
 app.get('/api/admin/testimonials', authenticateToken, async (req, res) => {
   try {
-    const testimonials = await prisma.testimonial.findMany({ orderBy: { created_at: 'desc' } });
-    res.json(testimonials);
+    const testimonials = await prisma.testimonial.findMany({ 
+      orderBy: { created_at: 'desc' }
+    });
+    // Map to expected admin format
+    const formattedTestimonials = testimonials.map(t => ({
+      id: t.id,
+      name: t.name,
+      role: t.position,
+      content: t.message,
+      image: t.photo_url,
+      is_active: t.is_active,
+      created_at: t.created_at
+    }));
+    res.json(formattedTestimonials);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -865,7 +957,7 @@ app.post('/api/admin/testimonials', authenticateToken, async (req, res) => {
   try {
     const { name, role, content, image } = req.body;
     const testimonial = await prisma.testimonial.create({
-      data: { name, role, content, image: image || null }
+      data: { name, position: role, message: content, photo_url: image || null }
     });
     res.json({ id: testimonial.id, message: 'Testimonial created successfully' });
   } catch (error) {
@@ -879,7 +971,7 @@ app.put('/api/admin/testimonials/:id', authenticateToken, async (req, res) => {
     const { name, role, content, image } = req.body;
     await prisma.testimonial.update({
       where: { id: Number(req.params.id) },
-      data: { name, role, content, image: image || null }
+      data: { name, position: role, message: content, photo_url: image || null }
     });
     res.json({ message: 'Testimonial updated successfully' });
   } catch (error) {
@@ -902,7 +994,17 @@ app.delete('/api/admin/testimonials/:id', authenticateToken, async (req, res) =>
 app.get('/api/admin/impact-stats', authenticateToken, async (req, res) => {
   try {
     const stats = await prisma.impactStat.findMany({ orderBy: { id: 'asc' } });
-    res.json(stats);
+    // Map to expected admin format
+    const formattedStats = stats.map(s => ({
+      id: s.id,
+      number: s.value,
+      label: s.label,
+      icon: s.icon,
+      suffix: s.suffix,
+      is_active: s.is_active,
+      created_at: s.created_at
+    }));
+    res.json(formattedStats);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -913,7 +1015,7 @@ app.post('/api/admin/impact-stats', authenticateToken, async (req, res) => {
   try {
     const { number, label, icon } = req.body;
     const stat = await prisma.impactStat.create({
-      data: { number, label, icon: icon || 'users' }
+      data: { value: parseInt(number), label, icon: icon || 'users' }
     });
     res.json({ id: stat.id, message: 'Stat created successfully' });
   } catch (error) {
@@ -927,7 +1029,7 @@ app.put('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
     const { number, label, icon } = req.body;
     await prisma.impactStat.update({
       where: { id: Number(req.params.id) },
-      data: { number, label, icon: icon || 'users' }
+      data: { value: parseInt(number), label, icon: icon || 'users' }
     });
     res.json({ message: 'Stat updated successfully' });
   } catch (error) {
@@ -961,7 +1063,7 @@ app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (r
 
   try {
     await prisma.gallery.create({
-      data: { image_url: imageUrl, caption: req.body.caption || req.file.originalname }
+      data: { image_url: imageUrl, title: req.body.caption || req.file.originalname }
     });
     res.json({
       message: 'File uploaded successfully',

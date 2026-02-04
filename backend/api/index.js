@@ -140,8 +140,9 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-console.log(`📂 Storage Mode: ${process.env.CLOUDINARY_API_SECRET ? 'Cloudinary' : 'Local Disk (Ephemeral)'}`);
+console.log(`📂 Storage Mode: ${process.env.CLOUDINARY_API_SECRET ? 'Cloudinary' : 'Local Disk (Not recommended for production)'}`);
 
+// For Vercel deployment, we should always use Cloudinary or external storage
 const storage = process.env.CLOUDINARY_API_SECRET
   ? new CloudinaryStorage({
       cloudinary: cloudinary,
@@ -150,18 +151,7 @@ const storage = process.env.CLOUDINARY_API_SECRET
         allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
       },
     })
-  : multer.diskStorage({
-      destination: (req, file, cb) => {
-        const uploadDir = path.join('/tmp', 'uploads'); // Use /tmp for serverless
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        cb(null, uploadDir);
-      },
-      filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-      }
-    });
+  : multer.memoryStorage(); // Use memory storage as fallback for Vercel
 
 const upload = multer({
   storage,
@@ -1377,16 +1367,22 @@ app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (r
   }
 
   let imageUrl;
-  if (req.file.path && req.file.path.startsWith('http')) {
-    imageUrl = req.file.path; // Cloudinary URL
+  
+  if (process.env.CLOUDINARY_API_SECRET && req.file.path && req.file.path.startsWith('http')) {
+    // Cloudinary upload successful
+    imageUrl = req.file.path;
   } else {
-    imageUrl = `/uploads/${req.file.filename}`; // Local URL
+    // Fallback: return error if Cloudinary is not configured
+    return res.status(500).json({ 
+      message: 'Image upload service not configured. Please configure Cloudinary.', 
+      error: 'CLOUDINARY_NOT_CONFIGURED' 
+    });
   }
 
   if (isPrismaAvailable()) {
     try {
       await prisma.gallery.create({
-        data: { image_url: imageUrl, caption: req.body.caption || req.file.originalname }
+        data: { image_url: imageUrl, title: req.body.caption || req.file.originalname }
       });
     } catch (error) {
       console.error('Error saving to gallery:', error);
@@ -1396,13 +1392,13 @@ app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (r
 
   res.json({
     message: 'File uploaded successfully',
-    filename: req.file.filename,
+    filename: req.file.filename || 'cloudinary-upload',
     url: imageUrl
   });
 });
 
-// Serve uploaded files - Note: In serverless, static files need special handling
-app.use('/uploads', express.static(path.join('/tmp', 'uploads')));
+// Serve uploaded files - Note: This won't work on Vercel for local files
+// app.use('/uploads', express.static(path.join('/tmp', 'uploads')));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
