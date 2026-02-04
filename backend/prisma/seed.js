@@ -120,11 +120,11 @@ async function main() {
   const leadersData = [
     { name: 'Mary Sambai', title: 'Academic and Sports', bio: 'Visionary leader with a passion for youth empowerment', photo_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', order_position: 0, is_active: true, created_at: '2026-01-15T19:58:59.000Z', updated_at: '2026-01-16T13:43:01.000Z', role: null },
     { name: 'Daniel delvin', title: 'Vice President', bio: 'Dedicated advocate for educational excellence', photo_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', order_position: 0, is_active: true, created_at: '2026-01-15T19:58:59.000Z', updated_at: '2026-01-16T13:43:39.000Z', role: null },
-    { name: 'Daniel  Wanjala', title: 'Organizing Secretary', bio: 'Strategic thinker focused on organizational growth', photo_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', order_position: 0, is_active: true, created_at: '2026-01-15T19:58:59.000Z', updated_at: '2026-01-16T13:41:14.000Z', role: null },
+    { name: 'Daniel  Wanjala', title: 'Organizing Secretary', bio: 'Strategic thinker focused on organizational growth', photo_url: 'https://res.cloudinary.com/dqdyjocsq/image/upload/v1770169845/1768570840442_bpgf5e.jpg', order_position: 0, is_active: true, created_at: '2026-01-15T19:58:59.000Z', updated_at: '2026-01-16T13:41:14.000Z', role: null },
     { name: 'Brian Manyonge', title: 'Treasurer', bio: 'Financial expert committed to transparency', photo_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', order_position: 0, is_active: true, created_at: '2026-01-15T19:58:59.000Z', updated_at: '2026-01-16T13:44:28.000Z', role: null },
     { name: 'Faith Wambwele', title: 'Deputy Secretary General', bio: 'Innovative program designer for community initiatives', photo_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', order_position: 0, is_active: true, created_at: '2026-01-15T19:58:59.000Z', updated_at: '2026-01-16T13:46:00.000Z', role: null },
     { name: 'Annita Wasike', title: 'Gender and Welfare', bio: 'Passionate storyteller sharing BUCCUSA impact', photo_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', order_position: 0, is_active: true, created_at: '2026-01-15T19:58:59.000Z', updated_at: '2026-01-16T13:42:11.000Z', role: null },
-    { name: 'Marvis nekesa', title: 'president', bio: 'Visionary leader with a passion for youth empowerment', photo_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', order_position: 1, is_active: true, created_at: '2026-01-16T12:49:05.000Z', updated_at: '2026-01-16T13:18:38.000Z', role: null },
+    { name: 'Marvis nekesa', title: 'president', bio: 'Visionary leader with a passion for youth empowerment', photo_url: 'https://res.cloudinary.com/dqdyjocsq/image/upload/v1770169845/1768567742740_f8b4qe.jpg', order_position: 1, is_active: true, created_at: '2026-01-16T12:49:05.000Z', updated_at: '2026-01-16T13:18:38.000Z', role: null },
     { name: 'Nixon Wekesa', title: 'Membership Secretary', bio: 'passionate about well being of people', photo_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', order_position: 2, is_active: true, created_at: '2026-01-16T13:57:44.000Z', updated_at: '2026-01-16T13:57:44.000Z', role: null },
     { name: 'Job Chesoli', title: 'chief of staff', bio: 'future minded soul', photo_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', order_position: 3, is_active: true, created_at: '2026-01-16T14:01:17.000Z', updated_at: '2026-01-31T13:26:51.000Z', role: null },
     { name: 'Onesmus Wekesa ', title: 'Publicity Lead', bio: 'we speak mind ', photo_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', order_position: 4, is_active: true, created_at: '2026-01-16T14:02:38.000Z', updated_at: '2026-01-16T14:09:41.000Z', role: null },
@@ -145,76 +145,6 @@ async function main() {
         role: leader.role
       }
     });
-  }
-
-  // Seed Gallery from Leaders, Members, Events, and Posts
-  console.log('🖼️ Seeding gallery from all entities...');
-  for (const leader of leadersData) {
-    if (leader.photo_url) {
-      const existing = await prisma.gallery.findFirst({
-        where: { image_url: leader.photo_url }
-      });
-      if (!existing) {
-        await prisma.gallery.create({
-          data: {
-            image_url: leader.photo_url,
-            title: `${leader.name} - ${leader.title}`,
-            created_at: new Date(leader.created_at)
-          }
-        });
-      }
-    }
-  }
-
-  for (const member of membersData) {
-    if (member.photo_url) {
-      const existing = await prisma.gallery.findFirst({
-        where: { image_url: member.photo_url }
-      });
-      if (!existing) {
-        await prisma.gallery.create({
-          data: {
-            image_url: member.photo_url,
-            title: `${member.name} - ${member.position || 'Member'}`,
-            created_at: new Date(member.created_at)
-          }
-        });
-      }
-    }
-  }
-
-  for (const event of eventsData) {
-    if (event.image_url) {
-      const existing = await prisma.gallery.findFirst({
-        where: { image_url: event.image_url }
-      });
-      if (!existing) {
-        await prisma.gallery.create({
-          data: {
-            image_url: event.image_url,
-            title: `Event: ${event.title}`,
-            created_at: new Date(event.created_at)
-          }
-        });
-      }
-    }
-  }
-
-  for (const post of postsData) {
-    if (post.image_url) {
-      const existing = await prisma.gallery.findFirst({
-        where: { image_url: post.image_url }
-      });
-      if (!existing) {
-        await prisma.gallery.create({
-          data: {
-            image_url: post.image_url,
-            title: `Post: ${post.title}`,
-            created_at: new Date(post.created_at)
-          }
-        });
-      }
-    }
   }
 
   // Seed Message Replies (using the mapped contact message IDs)
@@ -289,6 +219,9 @@ async function main() {
       content: 'BUCCUSA has transformed my leadership skills and connected me with amazing opportunities.',
       role: 'Former Student Leader',
       image: null,
+      message: 'BUCCUSA has transformed my leadership skills and connected me with amazing opportunities.',
+      position: 'Former Student Leader',
+      photo_url: null,
       is_active: true,
       created_at: new Date('2026-01-15T18:21:53.000Z'),
       updated_at: new Date('2026-01-15T18:21:53.000Z')
