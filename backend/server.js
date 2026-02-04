@@ -65,7 +65,7 @@ const storage = process.env.CLOUDINARY_API_SECRET
   ? new CloudinaryStorage({
       cloudinary: cloudinary,
       params: {
-        folder: 'bungoma-uploads',
+        folder: 'uploads',
         allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
       },
     })

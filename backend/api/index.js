@@ -140,6 +140,8 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+console.log(`📂 Storage Mode: ${process.env.CLOUDINARY_API_SECRET ? 'Cloudinary' : 'Local Disk (Ephemeral)'}`);
+
 const storage = process.env.CLOUDINARY_API_SECRET
   ? new CloudinaryStorage({
       cloudinary: cloudinary,
@@ -993,11 +995,21 @@ app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    await prisma.leader.delete({
-      where: { id: parseInt(req.params.id) }
-    });
-
-    res.json({ message: 'Official deleted successfully' });
+    const id = parseInt(req.params.id);
+    try {
+      await prisma.leader.delete({
+        where: { id }
+      });
+      res.json({ message: 'Official deleted successfully' });
+    } catch (dbError) {
+      if (dbError.code === 'P2025') {
+        return res.status(404).json({ message: 'Official not found' });
+      }
+      if (dbError.code === 'P2003') {
+        return res.status(400).json({ message: 'Cannot delete official because they are referenced by other records.' });
+      }
+      throw dbError;
+    }
   } catch (error) {
     const { isConnectionError } = handlePrismaError(error);
     const statusCode = isConnectionError ? 503 : 500;
