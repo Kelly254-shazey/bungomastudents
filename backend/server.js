@@ -132,6 +132,69 @@ app.post('/api/admin/login', async (req, res) => {
   }
 });
 
+// Forgot Password
+app.post('/api/admin/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const admin = await prisma.admin.findFirst({ where: { email } });
+    
+    if (!admin) {
+      return res.status(404).json({ message: 'User with this email not found' });
+    }
+
+    const token = jwt.sign(
+      { id: admin.id, type: 'reset' },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '1h' }
+    );
+
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/reset-password?token=${token}`;
+
+    if (transporter) {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: admin.email,
+        subject: 'Password Reset Request - BUCCUSA',
+        html: `<p>You requested a password reset. Click <a href="${resetLink}">here</a> to reset your password. This link expires in 1 hour.</p>`
+      });
+    }
+
+    res.json({ message: 'Password reset link sent to email' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Reset Password
+app.post('/api/admin/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: 'Token and new password are required' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    
+    if (decoded.type !== 'reset') {
+      return res.status(400).json({ message: 'Invalid token type' });
+    }
+
+    const password_hash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.admin.update({
+      where: { id: decoded.id },
+      data: { password_hash }
+    });
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ message: 'Invalid or expired token' });
+  }
+});
+
 // Public routes
 app.get('/api/programs', async (req, res) => {
   try {
@@ -201,7 +264,7 @@ app.get('/api/posts/:id', async (req, res) => {
 
 app.get('/api/impact-stats', async (req, res) => {
   try {
-    const stats = await prisma.impact_stats.findMany();
+    const stats = await prisma.impactStat.findMany();
     res.json(stats);
   } catch (error) {
     console.error(error);
@@ -241,7 +304,7 @@ app.post('/api/contact', async (req, res) => {
 
     // Insert into database
     try {
-      await prisma.contact_messages.create({
+      await prisma.contactMessage.create({
         data: { name, email, subject, message }
       });
     } catch (dbError) {
@@ -284,7 +347,7 @@ app.post('/api/partnership', async (req, res) => {
   try {
     const { organizationName, contactPerson, email, phone, partnershipType, message } = req.body;
 
-    await prisma.partnership_requests.create({
+    await prisma.partnershipRequest.create({
       data: {
         organization_name: organizationName,
         contact_person: contactPerson,
@@ -328,7 +391,7 @@ app.post('/api/volunteer', async (req, res) => {
   try {
     const { name, email, phone, interests, experience } = req.body;
 
-    await prisma.volunteer_submissions.create({
+    await prisma.volunteerSubmission.create({
       data: { name, email, phone, interests, experience }
     });
 
@@ -364,19 +427,19 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
   try {
     // Get comprehensive stats
     const stats = {
-      unread_messages: await prisma.contact_messages.count({ where: { is_read: false } }),
-      total_messages: await prisma.contact_messages.count(),
+      unread_messages: await prisma.contactMessage.count({ where: { is_read: false } }),
+      total_messages: await prisma.contactMessage.count(),
       published_posts: await prisma.post.count({ where: { published: true } }),
       total_posts: await prisma.post.count(),
       total_events: await prisma.event.count(),
       active_programs: await prisma.program.count({ where: { is_active: 1 } }),
       total_programs: await prisma.program.count(),
       total_testimonials: await prisma.testimonial.count(),
-      total_stats: await prisma.impact_stats.count(),
+      total_stats: await prisma.impactStat.count(),
       active_leaders: await prisma.leader.count({ where: { is_active: 1 } }),
       active_members: await prisma.member.count({ where: { is_active: 1 } })
     };
-    const recentContacts = await prisma.contact_messages.findMany({
+    const recentContacts = await prisma.contactMessage.findMany({
       select: { id: true, name: true, email: true, subject: true, created_at: true },
       orderBy: { created_at: 'desc' },
       take: 5
@@ -607,7 +670,7 @@ app.delete('/api/admin/events/:id', authenticateToken, async (req, res) => {
 // Contact Messages Management
 app.get('/api/admin/messages', authenticateToken, async (req, res) => {
   try {
-    const messages = await prisma.contact_messages.findMany({ orderBy: { created_at: 'desc' } });
+    const messages = await prisma.contactMessage.findMany({ orderBy: { created_at: 'desc' } });
     res.json(messages);
   } catch (error) {
     console.error(error);
@@ -625,13 +688,13 @@ app.post('/api/admin/messages/:id/reply', authenticateToken, async (req, res) =>
     }
 
     // Get message details from Prisma
-    const message = await prisma.contact_messages.findUnique({ where: { id: Number(messageId) } });
+    const message = await prisma.contactMessage.findUnique({ where: { id: Number(messageId) } });
     if (!message) {
       return res.status(404).json({ message: 'Message not found' });
     }
 
     // Mark message as read
-    await prisma.contact_messages.update({ where: { id: Number(messageId) }, data: { is_read: true } });
+    await prisma.contactMessage.update({ where: { id: Number(messageId) }, data: { is_read: true } });
 
     // Send email reply only if transporter is configured
     if (transporter) {
@@ -664,7 +727,7 @@ app.post('/api/admin/messages/:id/reply', authenticateToken, async (req, res) =>
 
 app.put('/api/admin/messages/:id/read', authenticateToken, async (req, res) => {
   try {
-    await prisma.contact_messages.update({ where: { id: Number(req.params.id) }, data: { is_read: true } });
+    await prisma.contactMessage.update({ where: { id: Number(req.params.id) }, data: { is_read: true } });
     res.json({ message: 'Message marked as read' });
   } catch (error) {
     console.error(error);
@@ -674,7 +737,7 @@ app.put('/api/admin/messages/:id/read', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/messages/:id', authenticateToken, async (req, res) => {
   try {
-    await prisma.contact_messages.delete({ where: { id: Number(req.params.id) } });
+    await prisma.contactMessage.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Message deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -783,7 +846,7 @@ app.delete('/api/admin/testimonials/:id', authenticateToken, async (req, res) =>
 // CRUD for Impact Stats
 app.get('/api/admin/impact-stats', authenticateToken, async (req, res) => {
   try {
-    const stats = await prisma.impact_stats.findMany({ orderBy: { id: 'asc' } });
+    const stats = await prisma.impactStat.findMany({ orderBy: { id: 'asc' } });
     res.json(stats);
   } catch (error) {
     console.error(error);
@@ -794,7 +857,7 @@ app.get('/api/admin/impact-stats', authenticateToken, async (req, res) => {
 app.post('/api/admin/impact-stats', authenticateToken, async (req, res) => {
   try {
     const { number, label, icon } = req.body;
-    const stat = await prisma.impact_stats.create({
+    const stat = await prisma.impactStat.create({
       data: { number, label, icon: icon || 'users' }
     });
     res.json({ id: stat.id, message: 'Stat created successfully' });
@@ -807,7 +870,7 @@ app.post('/api/admin/impact-stats', authenticateToken, async (req, res) => {
 app.put('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
   try {
     const { number, label, icon } = req.body;
-    await prisma.impact_stats.update({
+    await prisma.impactStat.update({
       where: { id: Number(req.params.id) },
       data: { number, label, icon: icon || 'users' }
     });
@@ -820,7 +883,7 @@ app.put('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/impact-stats/:id', authenticateToken, async (req, res) => {
   try {
-    await prisma.impact_stats.delete({ where: { id: Number(req.params.id) } });
+    await prisma.impactStat.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Stat deleted successfully' });
   } catch (error) {
     console.error(error);

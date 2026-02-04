@@ -12,7 +12,7 @@ async function main() {
     update: {},
     create: {
       username: 'buccusa',
-      password_hash: '$2b$10$0OK.NRHa8CH6P//S9vGmGe.mETWC7.PcyOzFRvEsDjgfMTtAY0esK',
+      password_hash: '$2b$10$3c0j5QJ6zFJq5bYH2X2p7uXbG1jzZy6wRr7b4rZcQk0nGJ7Z7dQ8a',
       email: 'admin@buccusa.org',
       created_at: new Date('2026-01-15T18:21:53.000Z'),
       updated_at: new Date('2026-01-15T21:43:53.000Z')
