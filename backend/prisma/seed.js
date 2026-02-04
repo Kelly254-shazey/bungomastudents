@@ -8,12 +8,15 @@ async function main() {
 
   // Seed Admins
   console.log('📝 Seeding admins...');
+  const adminPassword = await bcrypt.hash('buccusa', 10);
   const admin = await prisma.admin.upsert({
     where: { username: 'buccusa' },
-    update: {},
+    update: {
+      password_hash: adminPassword
+    },
     create: {
       username: 'buccusa',
-      password_hash: '$2b$10$3c0j5QJ6zFJq5bYH2X2p7uXbG1jzZy6wRr7b4rZcQk0nGJ7Z7dQ8a',
+      password_hash: adminPassword,
       email: 'admin@buccusa.org',
       created_at: new Date('2026-01-15T18:21:53.000Z'),
       updated_at: new Date('2026-01-15T21:43:53.000Z')
@@ -25,7 +28,9 @@ async function main() {
   const kellyPassword = await bcrypt.hash('kellyflo@341', 10);
   await prisma.admin.upsert({
     where: { email: 'kelly123simiyu@gmail.com' },
-    update: {},
+    update: {
+      password_hash: kellyPassword
+    },
     create: {
       username: 'kelly123simiyu',
       password_hash: kellyPassword,
@@ -140,6 +145,25 @@ async function main() {
         role: leader.role
       }
     });
+  }
+
+  // Seed Gallery from Leaders
+  console.log('🖼️ Seeding gallery from leaders...');
+  for (const leader of leadersData) {
+    if (leader.photo_url) {
+      const existing = await prisma.gallery.findFirst({
+        where: { image_url: leader.photo_url }
+      });
+      if (!existing) {
+        await prisma.gallery.create({
+          data: {
+            image_url: leader.photo_url,
+            caption: `${leader.name} - ${leader.title}`,
+            created_at: new Date(leader.created_at)
+          }
+        });
+      }
+    }
   }
 
   // Seed Message Replies (using the mapped contact message IDs)

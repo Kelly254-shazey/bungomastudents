@@ -25,7 +25,14 @@ const prisma = new PrismaClient({
 
 // Middleware
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "blob:"],
+      "img-src": ["'self'", "data:", "https:", "blob:"],
+    },
+  },
 }));
 app.use(cors());
 app.use(morgan('combined'));
@@ -935,15 +942,15 @@ app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (r
     await prisma.gallery.create({
       data: { image_url: imageUrl, caption: req.body.caption || req.file.originalname }
     });
+    res.json({
+      message: 'File uploaded successfully',
+      filename: req.file.filename,
+      url: imageUrl
+    });
   } catch (error) {
     console.error('Error saving to gallery:', error);
+    res.status(500).json({ message: 'Error saving to gallery', error: error.message });
   }
-
-  res.json({
-    message: 'File uploaded successfully',
-    filename: req.file.filename,
-    url: imageUrl
-  });
 });
 
 // Serve uploaded files
