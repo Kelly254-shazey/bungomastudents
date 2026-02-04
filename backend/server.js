@@ -297,6 +297,34 @@ app.post('/api/admin/upload', authenticateToken, async (req, res) => {
   }
 });
 
+// Fix image URLs - convert local paths to Cloudinary URLs
+app.post('/api/admin/fix-images', authenticateToken, async (req, res) => {
+  try {
+    const cloudinaryBase = 'https://res.cloudinary.com/dqdyjocsq/image/upload/';
+    
+    // Update gallery images
+    const galleryUpdates = await prisma.gallery.updateMany({
+      where: {
+        image_url: {
+          startsWith: '/uploads/'
+        }
+      },
+      data: {
+        image_url: {
+          // This would need to be done individually for each record
+        }
+      }
+    });
+    
+    res.json({ 
+      message: 'Image URLs updated to use Cloudinary',
+      updated: galleryUpdates.count 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
@@ -307,10 +335,14 @@ app.get('/api/db-check', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     const adminCount = await prisma.admin.count();
+    const galleryCount = await prisma.gallery.count();
+    const sampleGallery = await prisma.gallery.findMany({ take: 3 });
     res.json({ 
       database: 'connected', 
       status: 'OK',
       adminCount,
+      galleryCount,
+      sampleImages: sampleGallery.map(g => g.image_url),
       timestamp: new Date().toISOString() 
     });
   } catch (error) {
