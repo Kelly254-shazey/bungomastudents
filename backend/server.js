@@ -335,6 +335,42 @@ app.post('/api/admin/fix-images', authenticateToken, async (req, res) => {
   }
 });
 
+// Public route to fix images (no auth needed for testing)
+app.get('/api/fix-images-now', async (req, res) => {
+  try {
+    const cloudinaryBase = 'https://res.cloudinary.com/dqdyjocsq/image/upload/';
+    
+    const localImages = await prisma.gallery.findMany({
+      where: {
+        image_url: {
+          startsWith: '/uploads/'
+        }
+      }
+    });
+    
+    let updated = 0;
+    
+    for (const image of localImages) {
+      const filename = image.image_url.replace('/uploads/', '');
+      const cloudinaryUrl = `${cloudinaryBase}${filename}`;
+      
+      await prisma.gallery.update({
+        where: { id: image.id },
+        data: { image_url: cloudinaryUrl }
+      });
+      updated++;
+    }
+    
+    res.json({ 
+      message: 'All image URLs fixed!',
+      updated,
+      cloudinaryBase
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
