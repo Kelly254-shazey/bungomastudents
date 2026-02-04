@@ -3,6 +3,9 @@ const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const cloudinary = require('cloudinary').v2;
+const multer = require('multer');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -10,6 +13,23 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Cloudinary Configuration
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Multer Storage Configuration
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'bungoma-students',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+  },
+});
+const upload = multer({ storage: storage });
 
 // Auth middleware
 const authenticateToken = (req, res, next) => {
@@ -285,16 +305,16 @@ app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
 });
 
 // File upload route
-app.post('/api/admin/upload', authenticateToken, async (req, res) => {
-  try {
-    // This would need multer and cloudinary setup
-    res.status(501).json({ 
-      message: 'Upload not configured', 
-      note: 'Add CLOUDINARY_API_SECRET to enable uploads' 
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
   }
+  
+  res.json({ 
+    message: 'File uploaded successfully', 
+    url: req.file.path,
+    filename: req.file.filename
+  });
 });
 
 // Fix image URLs - convert local paths to Cloudinary URLs
@@ -404,7 +424,12 @@ app.get('/api/db-check', async (req, res) => {
 
 // Root route
 app.get('/', (req, res) => {
-  res.json({ message: 'BUCCUSA API Server', status: 'running' });
+  res.json({ 
+    message: 'BUCCUSA API Server', 
+    status: 'running',
+    version: '1.0.1',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Favicon handler
