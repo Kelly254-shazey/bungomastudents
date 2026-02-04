@@ -156,6 +156,7 @@ export function Footer() {
           viewport={{ once: true }}
         >
           <p>&copy; {currentYear} BUCCUSA. All rights reserved. Rooted in Bungoma. Rising Beyond.</p>
+          <p>by kellyflotechonologies  gmail:kelly123simiyu@gmail.com</p>
         </motion.div>
       </div>
     </footer>
