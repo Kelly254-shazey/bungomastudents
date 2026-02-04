@@ -43,13 +43,7 @@ prisma.$connect()
 // Middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: {
-    directives: {
-      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "blob:"],
-      "img-src": ["'self'", "data:", "https:", "blob:", "res.cloudinary.com"],
-    },
-  },
+  contentSecurityPolicy: false, // Disable CSP to fix frontend issues
 }));
 app.use(cors({
   origin: ['https://bgfront.vercel.app', 'http://localhost:3000', 'https://bungomastudents-1.vercel.app'],
@@ -1060,10 +1054,16 @@ app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (r
   }
 
   let imageUrl;
-  if (req.file.path && req.file.path.startsWith('http')) {
-    imageUrl = req.file.path; // Cloudinary URL
+  
+  if (process.env.CLOUDINARY_API_SECRET && req.file.path && req.file.path.startsWith('http')) {
+    // Cloudinary upload successful
+    imageUrl = req.file.path;
   } else {
-    imageUrl = `/uploads/${req.file.filename}`; // Local URL
+    // Fallback: return error since Vercel doesn't support local file storage
+    return res.status(500).json({ 
+      message: 'Image upload requires Cloudinary configuration. Local storage not supported on Vercel.', 
+      error: 'CLOUDINARY_NOT_CONFIGURED' 
+    });
   }
 
   try {
@@ -1072,7 +1072,7 @@ app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (r
     });
     res.json({
       message: 'File uploaded successfully',
-      filename: req.file.filename,
+      filename: req.file.filename || 'cloudinary-upload',
       url: imageUrl
     });
   } catch (error) {
@@ -1081,8 +1081,8 @@ app.post('/api/admin/upload', authenticateToken, upload.single('file'), async (r
   }
 });
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Remove static file serving - not supported on Vercel
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
