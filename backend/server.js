@@ -154,6 +154,136 @@ app.get('/api/impact-stats', async (req, res) => {
   }
 });
 
+// Admin routes
+app.get('/api/admin/leaders', authenticateToken, async (req, res) => {
+  try {
+    const leaders = await prisma.leader.findMany({ orderBy: { order_position: 'asc' } });
+    res.json(leaders);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post('/api/admin/leaders', authenticateToken, async (req, res) => {
+  try {
+    const { name, position, bio, image_url, order_position } = req.body;
+    const leader = await prisma.leader.create({
+      data: { name, position, bio, image_url, order_position: order_position || 0 }
+    });
+    res.json({ id: leader.id, message: 'Leader created successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.put('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
+  try {
+    const { name, position, bio, image_url, order_position } = req.body;
+    await prisma.leader.update({
+      where: { id: Number(req.params.id) },
+      data: { name, position, bio, image_url, order_position }
+    });
+    res.json({ message: 'Leader updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.delete('/api/admin/leaders/:id', authenticateToken, async (req, res) => {
+  try {
+    await prisma.leader.delete({ where: { id: Number(req.params.id) } });
+    res.json({ message: 'Leader deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/admin/programs', authenticateToken, async (req, res) => {
+  try {
+    const programs = await prisma.program.findMany({ orderBy: { id: 'asc' } });
+    res.json(programs);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post('/api/admin/programs', authenticateToken, async (req, res) => {
+  try {
+    const { title, description, icon } = req.body;
+    const program = await prisma.program.create({
+      data: { title, description, icon }
+    });
+    res.json({ id: program.id, message: 'Program created successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.put('/api/admin/programs/:id', authenticateToken, async (req, res) => {
+  try {
+    const { title, description, icon } = req.body;
+    await prisma.program.update({
+      where: { id: Number(req.params.id) },
+      data: { title, description, icon }
+    });
+    res.json({ message: 'Program updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.delete('/api/admin/programs/:id', authenticateToken, async (req, res) => {
+  try {
+    await prisma.program.delete({ where: { id: Number(req.params.id) } });
+    res.json({ message: 'Program deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/admin/posts', authenticateToken, async (req, res) => {
+  try {
+    const posts = await prisma.post.findMany({ orderBy: { created_at: 'desc' } });
+    res.json(posts);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post('/api/admin/posts', authenticateToken, async (req, res) => {
+  try {
+    const { title, content, excerpt, image_url, published } = req.body;
+    const post = await prisma.post.create({
+      data: { title, content, excerpt, image_url, published }
+    });
+    res.json({ id: post.id, message: 'Post created successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.put('/api/admin/posts/:id', authenticateToken, async (req, res) => {
+  try {
+    const { title, content, excerpt, image_url, published } = req.body;
+    await prisma.post.update({
+      where: { id: Number(req.params.id) },
+      data: { title, content, excerpt, image_url, published }
+    });
+    res.json({ message: 'Post updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.delete('/api/admin/posts/:id', authenticateToken, async (req, res) => {
+  try {
+    await prisma.post.delete({ where: { id: Number(req.params.id) } });
+    res.json({ message: 'Post deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
