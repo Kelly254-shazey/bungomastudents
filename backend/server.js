@@ -117,6 +117,48 @@ app.delete('/api/admin/messages/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Additional routes that frontend might expect
+app.get('/api/leaders', async (req, res) => {
+  try {
+    const leaders = await prisma.leader.findMany({ where: { is_active: true }, orderBy: { order_position: 'asc' } });
+    res.json(leaders);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/events', async (req, res) => {
+  try {
+    const events = await prisma.event.findMany({ orderBy: { event_date: 'desc' } });
+    res.json(events);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/gallery', async (req, res) => {
+  try {
+    const gallery = await prisma.gallery.findMany({ where: { is_active: true }, orderBy: { created_at: 'desc' } });
+    res.json(gallery);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/api/impact-stats', async (req, res) => {
+  try {
+    const stats = await prisma.impactStat.findMany({ where: { is_active: true }, orderBy: { id: 'asc' } });
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 // Error handling
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -124,7 +166,8 @@ app.use((err, req, res, next) => {
 });
 
 app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+  console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ message: 'Route not found', path: req.originalUrl });
 });
 
 if (process.env.NODE_ENV !== 'production') {
