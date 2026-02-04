@@ -51,7 +51,12 @@ app.use(helmet({
     },
   },
 }));
-app.use(cors());
+app.use(cors({
+  origin: ['https://bgfront.vercel.app', 'http://localhost:3000', 'https://bungomastudents-1.vercel.app'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 
@@ -1090,8 +1095,13 @@ app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Using Prisma backend`);
-});
+// Start server (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📊 Using Prisma backend`);
+  });
+}
+
+// Export for Vercel
+module.exports = app;

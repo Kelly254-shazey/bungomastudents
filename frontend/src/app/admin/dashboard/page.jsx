@@ -22,9 +22,13 @@ export default function AdminDashboard() {
         const data = await response.json()
         setDashboardData(data)
       } else if (response.status === 401) {
-        localStorage.removeItem('adminToken')
-        localStorage.removeItem('adminUser')
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
         window.location.href = '/admin/members/login'
+      } else {
+        console.error('Dashboard API error:', response.status, response.statusText)
+        const errorText = await response.text()
+        console.error('Error details:', errorText)
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
