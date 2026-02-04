@@ -1,4 +1,4 @@
-const app = require('../server-clean.js');
+const app = require('../server.js');
 
 // Export for Vercel serverless function
 module.exports = app;
