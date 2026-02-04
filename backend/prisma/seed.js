@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
@@ -19,6 +20,20 @@ async function main() {
     }
   });
   const adminId = admin.id;
+
+  // Seed Additional Admin (Kelly)
+  const kellyPassword = await bcrypt.hash('kellyflo@341', 10);
+  await prisma.admin.upsert({
+    where: { email: 'kelly123simiyu@gmail.com' },
+    update: {},
+    create: {
+      username: 'kelly123simiyu',
+      password_hash: kellyPassword,
+      email: 'kelly123simiyu@gmail.com',
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  });
 
   // Seed Contact Messages
   console.log('💬 Seeding contact messages...');

@@ -457,6 +457,38 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
   }
 });
 
+// Create new Admin
+app.post('/api/admin/create-admin', authenticateToken, async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: 'Username, email, and password are required' });
+    }
+
+    const existingAdmin = await prisma.admin.findFirst({
+      where: {
+        OR: [{ username }, { email }]
+      }
+    });
+
+    if (existingAdmin) {
+      return res.status(400).json({ message: 'Admin with this username or email already exists' });
+    }
+
+    const password_hash = await bcrypt.hash(password, 10);
+
+    await prisma.admin.create({
+      data: { username, email, password_hash }
+    });
+
+    res.json({ message: 'New admin created successfully' });
+  } catch (error) {
+    console.error('Error creating admin:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // CRUD operations for admin
 app.get('/api/admin/programs', authenticateToken, async (req, res) => {
   try {
