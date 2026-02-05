@@ -129,11 +129,11 @@ export function Chatbot() {
       {/* Chat Button */}
       <motion.button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 bg-primary hover:bg-opacity-90 text-white rounded-full p-4 shadow-lg transition-all duration-300"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 bg-primary hover:bg-opacity-90 text-white rounded-full p-3 sm:p-4 shadow-lg transition-all duration-300"
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
       >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
       </motion.button>
@@ -145,13 +145,13 @@ export function Chatbot() {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-24 right-6 z-50 w-96 bg-white rounded-lg shadow-2xl flex flex-col max-h-[600px]"
+            className="fixed bottom-20 right-4 sm:bottom-24 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-96 bg-white rounded-lg shadow-2xl flex flex-col max-h-[calc(100vh-6rem)] sm:max-h-[600px]"
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-primary to-secondary text-white p-4 rounded-t-lg flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-lg">BUCCUSA Assistant</h3>
-                <p className="text-sm text-gray-200">Website Support</p>
+            <div className="bg-gradient-to-r from-primary to-secondary text-white p-3 sm:p-4 rounded-t-lg flex justify-between items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-base sm:text-lg truncate">BUCCUSA Assistant</h3>
+                <p className="text-xs sm:text-sm text-gray-200">Website Support</p>
               </div>
               <button
                 onClick={() => setIsOpen(false)}
@@ -164,7 +164,7 @@ export function Chatbot() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50">
               <AnimatePresence>
                 {messages.map((message) => (
                   <motion.div
@@ -175,13 +175,13 @@ export function Chatbot() {
                     className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-xs px-4 py-2 rounded-lg ${
+                      className={`max-w-xs sm:max-w-sm px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-sm break-words ${
                         message.sender === 'user'
                           ? 'bg-primary text-white rounded-br-none'
                           : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
                       }`}
                     >
-                      <p className="text-sm">{message.text}</p>
+                      <p className="text-xs sm:text-sm">{message.text}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -208,7 +208,7 @@ export function Chatbot() {
 
             {/* Quick Actions */}
             {messages.length === 1 && (
-              <div className="px-4 py-3 border-t border-gray-200 bg-white">
+              <div className="px-3 sm:px-4 py-3 border-t border-gray-200 bg-white">
                 <p className="text-xs text-gray-600 mb-2">Quick topics:</p>
                 <div className="grid grid-cols-2 gap-2">
                   {['About BUCCUSA', 'Programs', 'Events', 'Contact Us'].map((topic) => (
@@ -221,7 +221,7 @@ export function Chatbot() {
                           form?.dispatchEvent(new Event('submit', { bubbles: true }))
                         }, 0)
                       }}
-                      className="text-xs bg-gray-100 hover:bg-primary hover:text-white text-gray-700 px-2 py-1 rounded transition-colors"
+                      className="text-xs bg-gray-100 hover:bg-primary hover:text-white text-gray-700 px-2 py-1 rounded transition-colors truncate"
                     >
                       {topic}
                     </button>
@@ -231,27 +231,27 @@ export function Chatbot() {
             )}
 
             {/* Input */}
-            <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 flex gap-2">
+            <form onSubmit={handleSendMessage} className="p-3 sm:p-4 border-t border-gray-200 flex gap-2">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask me anything..."
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                className="flex-1 px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-xs sm:text-sm"
               />
               <button
                 type="submit"
                 disabled={!input.trim()}
-                className="bg-primary hover:bg-opacity-90 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-all"
+                className="bg-primary hover:bg-opacity-90 disabled:opacity-50 text-white px-3 sm:px-4 py-2 rounded-lg transition-all flex-shrink-0"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
             </form>
 
             {/* Footer */}
-            <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 rounded-b-lg text-center text-xs text-gray-600">
+            <div className="px-3 sm:px-4 py-2 bg-gray-50 border-t border-gray-200 rounded-b-lg text-center text-xs text-gray-600">
               For more help, visit our{' '}
               <Link href="#contact" className="text-primary hover:underline font-semibold">
                 Contact page
